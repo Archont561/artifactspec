@@ -59,7 +59,7 @@ def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
         and "capabilities" in call
         for call in calls
     )
-    for command in ("capabilities", "validate", "lsp"):
+    for command in ("capabilities", "validate", "lsp", "render"):
         assert any(
             "-I" in call and command in call and "--help" in call for call in calls
         )
@@ -69,6 +69,7 @@ def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
             and "--help" in call
             for call in calls
         )
+    assert sum("render" in call and "--builtin-basic" in call for call in calls) == 2
 
 
 def test_check_packages_rejects_a_missing_wheel_license(monkeypatch):

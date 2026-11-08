@@ -1,12 +1,24 @@
 """LSP diagnostics backed by the same validator as the CLI."""
 
+from collections.abc import Sequence
+from urllib.parse import unquote
+
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import ServerTextPosition, TextDocument
 
+from artifactspec._lines import source_lines
 from artifactspec.discovery import installed_plugins
 from artifactspec.plugins import CapabilityCatalog, ManifestCatalog
 from artifactspec.validation import validate
+
+
+class _LanguageDocument(TextDocument):
+    """Use the same line boundaries as the parser, including for incremental edits."""
+
+    @property
+    def lines(self) -> Sequence[str]:
+        return source_lines(self.source)
 
 
 def _position(document: TextDocument, line: int, column: int) -> types.Position:
@@ -45,7 +57,19 @@ def create_server(catalog: CapabilityCatalog) -> LanguageServer:
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
     def did_open(params: types.DidOpenTextDocumentParams) -> None:
-        publish(params.text_document.uri)
+        item = params.text_document
+        workspace = server.workspace
+        original = workspace.get_text_document(item.uri)
+        # pygls uses str.splitlines(), which treats JSON string characters such
+        # as U+0085 as line breaks. Replace the workspace document before edits.
+        workspace.text_documents[unquote(item.uri)] = _LanguageDocument(
+            item.uri,
+            source=item.text,
+            version=item.version,
+            language_id=item.language_id,
+            position_codec=original.position_codec,
+        )
+        publish(item.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
     def did_change(params: types.DidChangeTextDocumentParams) -> None:
@@ -60,7 +84,12 @@ def create_server(catalog: CapabilityCatalog) -> LanguageServer:
     return server
 
 
-def start() -> None:
+def start(*, builtin_basic: bool = False) -> None:
     """Start the server over standard input and output."""
-    catalog = ManifestCatalog(item[1] for item in installed_plugins().values())
+    manifests = [item[1] for item in installed_plugins().values()]
+    if builtin_basic:
+        from artifactspec._basic_metadata import basic_manifest
+
+        manifests.append(basic_manifest())
+    catalog = ManifestCatalog(manifests)
     create_server(catalog).start_io()

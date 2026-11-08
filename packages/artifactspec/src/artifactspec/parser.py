@@ -8,6 +8,7 @@ from typing import cast
 from lark import Lark, Token, Tree
 from lark.exceptions import UnexpectedInput
 
+from artifactspec._lines import source_lines
 from artifactspec.plugins import CapabilityCatalog
 from artifactspec.syntax import (
     CreateStatement,
@@ -171,7 +172,7 @@ def parse(
     phrases: set[str] = set()
     properties: set[str] = set()
     statements: list[Statement] = []
-    for line_number, raw in enumerate(text.split("\n"), start=1):
+    for line_number, raw in enumerate(source_lines(text), start=1):
         line = raw.strip()
         if not line:
             continue

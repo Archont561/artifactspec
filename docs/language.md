@@ -4,12 +4,14 @@ This page defines the initial implemented syntax and the intended semantic
 contracts. Parsing is not validation or rendering: it does not resolve references,
 execute plugin handlers, infer facts, or guarantee that a renderer exists. The
 validation CLI and language server share semantic reference and type checks;
-plugin phase contexts and rendering are future work.
+a minimal trusted-plugin static SVG rendering pipeline is also available.
 
 ## Implemented syntax
 
-An input is a sequence of lines. Blank lines are ignored; every nonblank line
-contains exactly one statement ending in a period. There are no comments,
+An input is a sequence of lines separated by LF, CRLF, or CR. Other Unicode
+line-separator characters do not start a new line and may appear in JSON strings.
+Blank lines are ignored; every nonblank line contains exactly one statement
+ending in a period. There are no comments,
 multiline statements, imports, nested scopes, or multiple statements on a line.
 Leading and trailing whitespace is ignored. Keywords and capability names are
 case-sensitive; spaces between syntactic components are required. Only the
@@ -93,7 +95,7 @@ document = parse(
 ```
 
 The registered handlers in this example are placeholders and are not run by
-`parse`; actual phase contexts and invocation are future work.
+`parse`; the separate rendering pipeline uses phase contexts when explicitly invoked.
 
 ## Reference semantics
 
@@ -128,10 +130,11 @@ content will have meaning independent of any particular renderer. A
 **composition** arranges representations and, for animation, playback states;
 a **renderer** consumes an approved composition and produces artifacts plus
 warnings/provenance. A plugin can contribute phrases, properties,
-representations and renderers through the registry. The phase-specific context
-protocols and implementation of those layers are not provided by this parser.
-The following conceptual types describe intended relationships, **not current
-Python classes or a finalized wire format**:
+representations and renderers through the registry. Phase-specific context
+protocols and a small static implementation are available in
+`artifactspec.contexts`, `artifactspec.pipeline`, and `artifactspec.rendering`;
+the parser itself does not run them. The following conceptual types illustrate
+their relationships rather than a finalized wire format:
 
 ```text
 ContentNode       = semantic_type + typed_properties + provenance
@@ -143,10 +146,11 @@ Provenance        = zero_or_more_source_spans
 ```
 
 An image composition has static placements and no playback; an animation
-composition needs an explicit playback model. These are intended constraints,
-not checks performed by the current parser. The exact value types, placement
-model, output options and renderer contracts remain to be designed. Typed parse
-nodes only carry syntax and string literals; they are not these semantic types.
+composition needs an explicit playback model. These are not checks performed by
+the parser. The first implemented composition is static and supports text and
+rectangles; animation playback is not yet implemented. See `docs/rendering.md`
+for the current contract and limitations. Typed parse nodes only carry syntax
+and string literals; they are not these semantic types.
 
 For example, a domain timeline could be semantic content describing historical
 events; an image representation could lay those events out in a static diagram.
@@ -154,17 +158,17 @@ An animation representation could depict the same content, while its separate
 playback composition schedules visual states over elapsed time. A content event's
 date is not automatically an animation timestamp. Image output is static and
 has no playback timeline; animation requires explicit playback timing semantics
-before rendering. Neither layout, animation timing, interpolation nor output
-rendering is implemented here.
+before rendering. Animation timing and interpolation are not implemented.
 
 Source spans are carried from statements and literals into the parse tree. Future
 semantic, composition, and rendering phases must preserve enough source links to
 explain diagnostics and output provenance; one semantic item or output element
-may derive from multiple spans, and generated elements may have none. How to
-represent many-to-many provenance, validate units and property types, negotiate
-plugin/core compatibility, select representations, and approve fallbacks remains
-open. The example flows above are design illustrations, not supported syntax or
-claims of rendering capability.
+may derive from multiple spans, and generated elements may have none. The first
+rendering slice records source spans for emitted elements and rejects implicit
+fallback. General unit validation, compatibility negotiation and richer
+many-to-many output provenance remain open. The general example flows above are
+design illustrations, not claims that every output or representation has a
+renderer.
 
 ## Validation CLI
 
@@ -182,7 +186,9 @@ Diagnostics go to standard output; operational errors go to standard error.
 Multiple semantic errors are reported together, but syntax parsing currently
 stops at the first error. Installed capabilities are discovered from static
 manifests; the command does not load plugins or execute handlers. Legacy
-version 1 manifests produce warnings where type information is missing.
+version 1 manifests produce warnings where type information is missing. Pass
+`--builtin-basic` to include the built-in static capabilities for validation
+without executing plugin handlers.
 
 ## Editor diagnostics
 
@@ -191,7 +197,8 @@ loads installed static manifests at startup, uses the same validator and
 validation codes as the CLI, and does not import plugin modules. Configure an
 LSP client to start that command for ArtifactSpec documents; the server does not
 register a file extension or install editor configuration. Restart it after
-installing or changing plugins so that it can rediscover their metadata.
+installing or changing plugins so that it can rediscover their metadata. Use
+`artifactspec lsp --builtin-basic` to include the built-in static manifest.
 
 The server validates on document open and change, and clears diagnostics on
 close. Both full and incremental changes are supported; LSP positions use the
