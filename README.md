@@ -8,13 +8,17 @@ ArtifactSpec is an early-stage Python project for describing and producing visua
 artifacts with an agent-friendly language. The intended design separates semantic
 content, representations, composition, and rendering.
 
-**Current status:** the two distributions are version-only scaffolds. Both expose
-`VERSION` from installed distribution metadata. The language, CLI, plugin API,
-Manim renderer, and other planned capabilities are not implemented yet.
+**Current status:** the core provides a plugin registry and a CLI for safe static
+capability discovery. The Manim distribution remains a version-only placeholder.
+The artifact language, phase contexts, validation, and rendering are not yet
+implemented. Both package roots expose `VERSION` from distribution metadata.
+
+Run `artifactspec capabilities --details` to inspect installed plugin metadata
+without importing plugin code. See [plugin registration and discovery](docs/plugins.md).
 
 ## Repository guide
 
-- [`packages/artifactspec`](packages/artifactspec/README.md) — core scaffold.
+- [`packages/artifactspec`](packages/artifactspec/README.md) — core package.
 - [`packages/artifactspec-manim`](packages/artifactspec-manim/README.md) —
   renderer placeholder; it has no Manim dependency.
 - [`backlog`](backlog/README.md) — product specification, decisions, milestones,
@@ -41,8 +45,7 @@ pixi run --locked coverage-all
 ```
 
 The full coverage task requires at least **91% total line coverage** across both
-package source trees. Today those trees contain only the version scaffolds; the
-number does not measure scripts or prove visual correctness. See
+package source trees. The number does not measure scripts or prove visual correctness. See
 [CI](docs/ci.md) for the full check matrix and coverage scope.
 
 Package test and coverage tasks install the local projects without build

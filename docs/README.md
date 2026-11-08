@@ -1,8 +1,9 @@
 # Documentation
 
-ArtifactSpec is currently a version-only scaffold. The intended language and
-architecture are design work, not implemented functionality.
+ArtifactSpec provides plugin registration and static capability discovery. The
+language, phase contexts, validation and rendering remain design work.
 
+- [Plugin registration and capability discovery](plugins.md)
 - [Product and architecture specification](../backlog/docs/doc-1%20-%20ArtifactSpec-product-and-architecture-specification.md)
 - [Backlog, milestones, and decisions](../backlog/README.md)
 - [Continuous integration and sandbox publishing](ci.md)

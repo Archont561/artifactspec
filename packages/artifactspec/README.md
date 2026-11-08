@@ -1,20 +1,20 @@
-# ArtifactSpec core scaffold
+# ArtifactSpec core
 
-`artifactspec` is the planned core distribution for an agent-friendly artifact
-framework. It currently exposes only `VERSION`, read from installed distribution
-metadata. The artifact language, CLI, plugin interfaces, validation, and rendering
-are not implemented.
+The core package provides decorator-based plugin registration and static
+capability discovery. Discovery does not import installed plugin code; plugins
+are trusted executable Python and must be approved before loading. The artifact
+language, phase contexts, validation and rendering are not implemented yet.
 
-After installing the local project, inspect the version with:
-
-```python
-from artifactspec import VERSION
-
-print(VERSION)
+```sh
+artifactspec capabilities
+artifactspec capabilities --details --output svg
 ```
 
-The version is declared in this package's `pyproject.toml`. The repository's
-`pixi run --locked test` task installs the local packages and runs the core
-package's BDD tests against the current source. Reinstall after changing package
-metadata. See the [repository](https://github.com/Archont561/artifactspec) for
-the design, contribution guide, and current status.
+The package root exports `VERSION`, read from installed distribution metadata.
+Plugin interfaces live in `artifactspec.plugins`. See the
+[plugin contract](https://github.com/Archont561/artifactspec/blob/main/docs/plugins.md)
+for manifest format, trust boundaries, registration and CLI JSON schema.
+
+The repository's `pixi run --locked test` task installs the local packages and
+runs the core package's BDD and unit tests against current source. Reinstall
+after changing package metadata.

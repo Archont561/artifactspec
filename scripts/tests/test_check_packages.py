@@ -40,6 +40,15 @@ def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
     assert any("twine" in call and "check" in call for call in calls)
     assert any("--no-deps" in call for call in calls)
     assert any("-I" in call and "-c" in call for call in calls)
+    assert any(
+        "-I" in call and "artifactspec" in call and "capabilities" in call
+        for call in calls
+    )
+    assert any(
+        Path(call[0]).name in {"artifactspec", "artifactspec.exe"}
+        and "capabilities" in call
+        for call in calls
+    )
 
 
 def test_check_packages_rejects_a_missing_wheel_license(monkeypatch):

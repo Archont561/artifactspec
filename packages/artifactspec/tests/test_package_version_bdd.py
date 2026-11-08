@@ -68,14 +68,3 @@ with patch('importlib.metadata.version', return_value='9.8.7') as get_version:
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stderr
-
-
-@then("the package has no other source files")
-def only_initializer_in_source():
-    source = Path(__file__).resolve().parents[1] / "src" / "artifactspec"
-    files = [
-        p.relative_to(source).as_posix()
-        for p in source.rglob("*")
-        if p.is_file() and "__pycache__" not in p.parts
-    ]
-    assert files == ["__init__.py"]
