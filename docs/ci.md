@@ -14,20 +14,29 @@ workflow consumes job outputs; environment values are local to their job.
   into docs cannot hide a code change.
 - Conventional commit validation and the final CI result gate always run.
 
-Pull requests compare from the merge base. Pushes compare their before and after
-commits. A new branch push has no before revision: it runs full CI and commit
-lint checks commits since the merge base with the default branch, failing if that
-merge base is unavailable. A manual run without a base checks all commits
-reachable from HEAD.
+Pull requests compare from the merge base. Ordinary pushes compare their before
+and after commits, and fail commit lint if either revision is unavailable. A new
+branch push has no before revision and runs full CI. For new branch pushes and
+force-pushes, commit lint checks all commits since the merge base with the default
+branch, regardless of whether the old head is still available. This also checks
+commits retained across a force-push. If the merge base or default branch is
+unavailable, lint fails closed. For a force-push to the default branch, or its
+initial creation, lint checks all commits reachable from HEAD instead: the remote
+default branch points to the new head and cannot be a useful comparison base.
+A manual run without a base also checks all commits reachable from HEAD. An
+unavailable change-scope comparison still runs full CI.
 
 Full CI runs coverage across both packages and uploads `coverage.xml` with the
 Codecov action. Configure the `CODECOV_TOKEN` repository secret where required by
 Codecov. Fork pull requests still run coverage but skip the upload, since secrets
-are not generally available to them. There is no coverage threshold yet.
-Coverage uses coverage.py subprocess instrumentation and source directories to
-include exercised Python package lines. Native code and external programs are
-not measured. A successful coverage upload
-or render does not establish visual correctness.
+are not generally available to them. The coverage.py configuration fails reports
+below 91% total line coverage across the two package source trees; the full CI job
+uses this same gate before upload. The separate core-only `coverage` task applies
+the threshold to the core package alone. Script tests are run, but script code is
+not included in this coverage figure. Coverage uses subprocess instrumentation to
+include exercised package lines. Native code and external programs are not
+measured. A successful coverage upload or render does not establish visual
+correctness.
 
 Merge pull requests using **rebase merge only**; do not use merge commits or
 squash merges. Configure repository merge settings accordingly where possible.

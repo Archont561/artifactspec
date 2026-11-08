@@ -1,4 +1,4 @@
-# Upload is performed by the full CI job; no coverage threshold is imposed yet.
+# Upload is performed by the full CI job; coverage.py enforces the threshold.
 coverage:
   status:
     project: false

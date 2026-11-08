@@ -54,26 +54,17 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_FORCED: ${{ github.event.forced }}
+          EVENT_REF: ${{ github.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "push" && ( -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ) ]]; then
-            # A new branch has no before SHA; validate its commits since the default branch.
-            BASE_SHA="$(git merge-base "refs/remotes/origin/$DEFAULT_BRANCH" "$HEAD_SHA")"
-            pixi run --locked -x convco check --merges "${BASE_SHA}..${HEAD_SHA}"
-          elif [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
-            # Manual run: validate all commits reachable from head.
-            pixi run --locked -x convco check --merges "$HEAD_SHA"
-          else
-            if [[ "$EVENT_NAME" == "pull_request" ]]; then
-              BASE_SHA="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-            fi
-            # Fail closed when a comparison revision is unavailable.
-            git cat-file -e "${BASE_SHA}^{commit}"
-            git cat-file -e "${HEAD_SHA}^{commit}"
-            pixi run --locked -x convco check --merges "${BASE_SHA}..${HEAD_SHA}"
-          fi
+          RANGE="$(python scripts/select_commit_range.py \
+            --base "$BASE_SHA" --head "$HEAD_SHA" --event "$EVENT_NAME" \
+            --forced "${EVENT_FORCED:-false}" --ref "$EVENT_REF" --default-branch "$DEFAULT_BRANCH")"
+          printf 'Checking commits: %s\n' "$RANGE"
+          pixi run --locked -x convco check --merges "$RANGE"
 
   docs:
     name: Documentation and backlog
