@@ -28,7 +28,7 @@ def test_event_content_can_be_composed_without_svg():
     composition = compose(
         content, output="report", representation="diagram", registry=registry()
     )
-    assert composition.elements[0].text == "2024-02-29: Leap day"
+    assert composition.elements[0].value.text == "2024-02-29: Leap day"
     assert not hasattr(composition, "playback")
 
 

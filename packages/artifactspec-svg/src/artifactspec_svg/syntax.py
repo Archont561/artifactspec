@@ -3,7 +3,7 @@
 import re
 from html import escape
 
-from artifactspec.core.models import Composition, RectangleElement, TextElement
+from artifactspec.core.models import Composition
 
 
 def xml_text(value: str) -> str:
@@ -50,15 +50,12 @@ def serialize_svg(composition: Composition) -> bytes:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{composition.width}" height="{composition.height}" viewBox="0 0 {composition.width} {composition.height}">'
     ]
     for item in composition.elements:
-        if isinstance(item, TextElement):
-            parts.append(
-                f'<text x="{item.x}" y="{item.y}" font-size="{item.size}" fill="{svg_color(item.color)}">{xml_text(item.text)}</text>'
-            )
-        elif isinstance(item, RectangleElement):
-            parts.append(
-                f'<rect x="{item.x}" y="{item.y}" width="{item.width}" height="{item.height}" fill="{svg_color(item.color)}"/>'
-            )
-        else:
-            raise TypeError(f"unsupported visual element {type(item).__name__}")
+        value = item.value
+        if (
+            getattr(value, "media_type", None) != "image/svg+xml"
+            or type(value).__str__ is object.__str__
+        ):
+            raise TypeError(f"unsupported visual element {type(value).__name__}")
+        parts.append(str(value))
     parts.append("</svg>")
     return "\n".join(parts).encode("utf-8")

@@ -152,10 +152,10 @@ def apply(ctx):
 @plugin.representation("external")
 def layout(ctx):
     for node in ctx.content.nodes:
-        ctx.text(node.name, dict(node.properties)["value"], x=5, y=20)
+        ctx.add(node.name, dict(node.properties)["value"])
 @plugin.renderer("external-svg")
 def render(ctx):
-    text = escape(ctx.composition.elements[0].text)
+    text = escape(ctx.composition.elements[0].value)
     ctx.emit(f"<svg>{{text}}</svg>".encode(), media_type="image/svg+xml", editable=True)
 """
     fixture = installed_plugin_factory(manifest=manifest, module_source=source_code)

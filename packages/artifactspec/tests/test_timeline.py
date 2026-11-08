@@ -41,8 +41,8 @@ def test_calendar_date_is_preserved_as_content_not_playback(event_date):
         layout = compose(
             content, output=output, representation="diagram", registry=registry_
         )
-        assert layout.elements[0].text == f"{text}{separator}Event"
-        assert layout.elements[0].y == 40
+        assert layout.elements[0].value.text == f"{text}{separator}Event"
+        assert layout.elements[0].value.y == 40
         assert not hasattr(layout, "playback")
 
 

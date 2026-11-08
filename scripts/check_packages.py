@@ -95,12 +95,16 @@ def _install_wheels(root: Path, wheels: list[Path]) -> tuple[Path, Path]:
         "-c",
         "from artifactspec.plugins.discovery import installed_plugins; "
         "assert set(installed_plugins()) == {'events'}; "
+        "from importlib.util import find_spec; "
+        "assert find_spec('artifactspec_svg') is None; "
         "from artifactspec.plugins import Registry; "
         "from artifactspec.core.pipeline import build_content; "
         "from artifactspec.core.rendering import compose; "
         "registry = Registry(); registry.load_installed('events'); "
         'content = build_content(\'Output report.\\nCreate event named e.\\nSet date of e to "2000-01-01".\\nSet label of e to "milestone".\', registry); '
-        "assert compose(content, output='report', representation='diagram', registry=registry).elements[0].text == '2000-01-01: milestone'",
+        "assert compose(content, output='report', representation='diagram', registry=registry).elements[0].value.text == '2000-01-01: milestone'; "
+        "event_image = compose(content, output='image', representation='diagram', registry=registry).elements[0].value; "
+        "assert event_image.media_type == 'image/svg+xml' and str(event_image).startswith('<text ') ",
     )
     run(str(python), "-m", "pip", "install", "--no-deps", str(svg))
     console = venv / (

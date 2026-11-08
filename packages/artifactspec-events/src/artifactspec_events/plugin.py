@@ -9,6 +9,7 @@ from artifactspec.core.contexts import (
     RepresentationContext,
 )
 from artifactspec.plugin import Phrase, Plugin, Property, Representation
+from artifactspec_events.elements import EventText, ReportText
 
 plugin = Plugin(
     "events",
@@ -72,6 +73,8 @@ def represent_event(context: RepresentationContext) -> None:
         "Diagram uses a fixed canvas and does not wrap or measure text; inspect for clipping and font differences."
     )
     separator = " — " if context.output == "image" else ": "
-    context.text(
-        node.name, properties["date"] + separator + properties["value"], x=20, y=y
+    text = properties["date"] + separator + properties["value"]
+    element = (
+        EventText(20, y, text) if context.output == "image" else ReportText(20, y, text)
     )
+    context.add(node.name, element)

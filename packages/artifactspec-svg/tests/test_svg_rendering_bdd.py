@@ -16,14 +16,16 @@ def state():
 
 @given("a composition containing a text element")
 def composition(state):
-    from artifactspec.core.models import Composition, TextElement
+    from artifactspec_svg.elements import Text
+
+    from artifactspec.core.models import Composition, Element
 
     state["composition"] = Composition(
         "image",
         "basic",
         640,
         480,
-        (TextElement(20, 40, "Hello & SVG", "navy", 20, ()),),
+        (Element(Text(20, 40, "Hello & SVG", "navy", 20), ()),),
     )
 
 

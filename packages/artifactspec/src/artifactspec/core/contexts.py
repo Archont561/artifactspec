@@ -53,27 +53,9 @@ class RepresentationContext(Protocol):
 
     def warn(self, message: str) -> None: ...
 
-    def text(
-        self,
-        node: str,
-        value: str,
-        *,
-        x: float,
-        y: float,
-        size: float = 20,
-        color: str = "black",
-    ) -> None: ...
-
-    def rectangle(
-        self,
-        node: str,
-        *,
-        x: float,
-        y: float,
-        width: float,
-        height: float,
-        color: str = "black",
-    ) -> None: ...
+    def add(self, node: str, value: object) -> None:
+        """Add a plugin-owned value with source links to a semantic object."""
+        ...
 
 
 class RendererContext(Protocol):
