@@ -15,8 +15,10 @@ workflow consumes job outputs; environment values are local to their job.
 - Conventional commit validation and the final CI result gate always run.
 
 Pull requests compare from the merge base. Pushes compare their before and after
-commits. With no base, full CI runs and commit lint checks all commits reachable
-from HEAD. A manual workflow run also takes this conservative path.
+commits. A new branch push has no before revision: it runs full CI and commit
+lint checks commits since the merge base with the default branch, failing if that
+merge base is unavailable. A manual run without a base checks all commits
+reachable from HEAD.
 
 Full CI runs coverage across both packages and uploads `coverage.xml` with the
 Codecov action. Configure the `CODECOV_TOKEN` repository secret where required by
