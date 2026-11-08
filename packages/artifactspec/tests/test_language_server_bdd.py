@@ -15,9 +15,9 @@ scenarios(
 
 
 class Client:
-    def __init__(self, env):
+    def __init__(self, env, options=()):
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "artifactspec", "lsp"],
+            [sys.executable, "-m", "artifactspec", "lsp", *options],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -69,6 +69,7 @@ def state():
 
 
 @given("an editor connected to the language server with typed static capabilities")
+@given("an editor using incremental changes with typed static capabilities")
 def connected(state, installed_plugin_factory):
     fixture = installed_plugin_factory(
         manifest={
@@ -256,3 +257,152 @@ def test_cli_lsp_reports_invalid_static_metadata(installed_plugin_factory, monke
     assert result.exit_code == 2
     assert "cannot read manifest" in result.stderr
     assert not fixture["marker"].exists()
+
+
+@when(
+    "the editor opens a specification with a Unicode separator before an unresolved reference"
+)
+def open_unicode_separator_document(state):
+    text = 'Output image.\nCreate circle named c.\nSet color of c to "\u0085😀".\nSet color of missing to "red".'
+    state["client"].send(
+        "textDocument/didOpen",
+        {
+            "textDocument": {
+                "uri": state["uri"],
+                "languageId": "artifactspec",
+                "version": 1,
+                "text": text,
+            }
+        },
+    )
+
+
+@then("the diagnostic identifies the reference on the correct line")
+def check_unicode_separator_diagnostic(state):
+    diagnostic = state["client"].receive()["params"]["diagnostics"][0]
+    assert diagnostic["code"] == "unresolved_reference"
+    assert diagnostic["range"] == {
+        "start": {"line": 3, "character": 13},
+        "end": {"line": 3, "character": 20},
+    }
+
+
+@when("the editor replaces that reference with an incremental edit")
+def edit_unicode_separator_document(state):
+    state["client"].send(
+        "textDocument/didChange",
+        {
+            "textDocument": {"uri": state["uri"], "version": 2},
+            "contentChanges": [
+                {
+                    "range": {
+                        "start": {"line": 3, "character": 13},
+                        "end": {"line": 3, "character": 20},
+                    },
+                    "text": "c",
+                }
+            ],
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "encoding,expected_offset", [("utf-8", 16), ("utf-16", 14), ("utf-32", 14)]
+)
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_incremental_edits_after_separators_use_negotiated_encoding(
+    state, installed_plugin_factory, encoding, expected_offset, newline
+):
+    fixture = installed_plugin_factory(
+        manifest={
+            "schema_version": 2,
+            "id": "example",
+            "version": "1",
+            "outputs": ["image"],
+            "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
+            "properties": [
+                {"name": "color", "outputs": [], "target_types": ["circle"]}
+            ],
+            "representations": [],
+            "renderers": [],
+        }
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(fixture["path"]), env.get("PYTHONPATH", "")]
+    )
+    client = state["client"] = Client(env)
+    client.send(
+        "initialize",
+        {
+            "processId": None,
+            "rootUri": None,
+            "capabilities": {"general": {"positionEncodings": [encoding]}},
+        },
+        id=1,
+    )
+    assert client.receive()["result"]["capabilities"]["positionEncoding"] == encoding
+    client.send("initialized", {})
+    uri = "file:///scene.art"
+    text = newline.join(
+        [
+            "Output image.",
+            "Create circle named c.",
+            'Set color of c to "\u0085😀".',
+            '\u3000Set color of missing to "red".',
+        ]
+    )
+    client.send(
+        "textDocument/didOpen",
+        {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "artifactspec",
+                "version": 1,
+                "text": text,
+            }
+        },
+    )
+    diagnostic = client.receive()["params"]["diagnostics"][0]
+    assert diagnostic["code"] == "unresolved_reference"
+    assert diagnostic["range"] == {
+        "start": {"line": 3, "character": expected_offset},
+        "end": {"line": 3, "character": expected_offset + 7},
+    }
+    client.send(
+        "textDocument/didChange",
+        {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": [
+                {
+                    "range": {
+                        "start": {"line": 3, "character": expected_offset},
+                        "end": {"line": 3, "character": expected_offset + 7},
+                    },
+                    "text": "c",
+                }
+            ],
+        },
+    )
+    assert client.receive()["params"]["diagnostics"] == []
+
+
+def test_lsp_can_validate_builtin_capabilities_without_loading_handlers(state):
+    client = state["client"] = Client(os.environ.copy(), options=["--builtin-basic"])
+    client.send(
+        "initialize", {"processId": None, "rootUri": None, "capabilities": {}}, id=1
+    )
+    assert client.receive()["id"] == 1
+    client.send("initialized", {})
+    client.send(
+        "textDocument/didOpen",
+        {
+            "textDocument": {
+                "uri": "file:///builtin.art",
+                "languageId": "artifactspec",
+                "version": 1,
+                "text": 'Output image.\nCreate text named t.\nSet value of t to "hello".',
+            }
+        },
+    )
+    assert client.receive()["params"]["diagnostics"] == []

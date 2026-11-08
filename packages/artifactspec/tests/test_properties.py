@@ -6,9 +6,8 @@ import string
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from pygls.workspace import TextDocument
 
-from artifactspec.lsp import _position
+from artifactspec.lsp import _LanguageDocument, _position
 from artifactspec.parser import ParseError, parse
 from artifactspec.plugins import (
     ManifestCatalog,
@@ -163,9 +162,9 @@ def test_declared_types_are_matched_exactly(object_type, target_type):
 @given(text=value_text, prefix_length=st.integers(min_value=0, max_value=40))
 def test_lsp_positions_use_utf16_units(text, prefix_length):
     # A single line avoids client line splitting and exercises non-BMP characters.
-    text = "".join(" " if char.splitlines() != [char] else char for char in text)
+    text = text.replace("\r", " ").replace("\n", " ")
     length = min(prefix_length, len(text))
-    document = TextDocument("file:///test.art", source=text)
+    document = _LanguageDocument("file:///test.art", source=text)
     result = _position(document, 1, length + 1)
     assert (result.line, result.character) == (
         0,
@@ -287,3 +286,32 @@ def test_nested_command_trees_invoke_the_correct_leaf(depth, text):
         result = CliRunner().invoke(root, [*["next"] * level, "show"])
         assert result.exit_code == 0, result.output
         assert result.output == text + "\n"
+
+
+@given(text=value_text)
+def test_source_lines_preserve_content_and_only_split_lsp_newlines(text):
+    import re
+
+    from artifactspec._lines import source_lines
+
+    lines = source_lines(text)
+    assert "".join(lines) == text
+    assert len(lines) == len(re.findall(r"\r\n|\r|\n", text)) + 1
+    assert all(line.endswith(("\r", "\n")) for line in lines[:-1])
+    assert "\r" not in lines[-1] and "\n" not in lines[-1]
+
+
+@settings(deadline=None)
+@given(newline=st.sampled_from(["\n", "\r\n", "\r"]), value=value_text)
+def test_parser_positions_follow_lsp_line_endings(newline, value):
+    text = newline.join(
+        [
+            "Output image.",
+            "Create circle named x.",
+            f"Set label of x to {json.dumps(value)}.",
+        ]
+    )
+    document = parse(text, typed_catalog())
+    assert document.statements[0].span.start.line == 2
+    assert document.statements[1].span.start.line == 3
+    assert document.statements[1].value.value == value

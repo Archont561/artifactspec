@@ -4,7 +4,7 @@ title: Add Python compatibility testing
 status: In Progress
 assignee: []
 created_date: '2026-11-08 02:54'
-updated_date: '2026-11-08 02:58'
+updated_date: '2026-11-08 16:38'
 labels: []
 dependencies: []
 priority: high
@@ -20,7 +20,7 @@ Declared Python support is not currently verified across interpreters or platfor
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CI tests the core package across the documented Python and operating system matrix.
+- [x] #1 CI tests the core package across the documented Python and operating system matrix.
 - [ ] #2 Matrix failures participate in the stable CI result gate without running on docs-only or scripts-only changes.
 - [x] #3 Document the tested matrix and limitations, including optional Manim.
 <!-- AC:END -->
@@ -35,4 +35,6 @@ Inspect current configuration, add narrowly scoped tooling and CI integration, d
 
 <!-- SECTION:NOTES:BEGIN -->
 Configured Python 3.11–3.14 core matrix on Linux, macOS and Windows as a full-CI required result. actionlint passed and the exact core test selection passed locally on Linux Python 3.13. GitHub matrix and other platforms remain unverified; ART-25 tracks remote CI verification.
+
+PR #16 run 42498974241 and post-merge run 42499271163 passed the complete Python 3.11–3.14 matrix on Linux, macOS and Windows, including the full-CI result gate. Remote docs-only and scripts-only routing has not yet been verified under ART-25.
 <!-- SECTION:NOTES:END -->

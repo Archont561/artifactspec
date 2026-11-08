@@ -57,9 +57,37 @@ def main() -> None:
         )
         run(str(console), "capabilities", "--details")
         # Both installed entry points must discover every built-in command module.
-        for command in ("capabilities", "validate", "lsp"):
+        for command in ("capabilities", "validate", "lsp", "render"):
             run(str(python), "-I", "-m", "artifactspec", command, "--help")
             run(str(console), command, "--help")
+        source = root / "scene.art"
+        source.write_text(
+            'Output image.\nCreate text named title.\nSet value of title to "wheel smoke".',
+            encoding="utf-8",
+        )
+        for index, entry in enumerate(
+            ((str(python), "-I", "-m", "artifactspec"), (str(console),))
+        ):
+            destination = root / f"image-{index}.svg"
+            run(
+                *entry,
+                "render",
+                str(source),
+                "--builtin-basic",
+                "--representation",
+                "basic",
+                "--renderer",
+                "svg",
+                "--output",
+                str(destination),
+            )
+            run(
+                str(python),
+                "-I",
+                "-c",
+                "import sys, xml.etree.ElementTree as ET; assert ET.parse(sys.argv[1]).getroot().find('{http://www.w3.org/2000/svg}text').text == 'wheel smoke'",
+                str(destination),
+            )
         run(
             str(python),
             "-I",

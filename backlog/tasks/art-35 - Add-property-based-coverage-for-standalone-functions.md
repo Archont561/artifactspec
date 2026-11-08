@@ -1,11 +1,11 @@
 ---
 id: ART-35
 title: Add property-based coverage for standalone functions
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 16:03'
-updated_date: '2026-11-08 16:08'
+updated_date: '2026-11-08 16:38'
 labels: []
 dependencies: []
 priority: high
@@ -21,7 +21,7 @@ The user requested Hypothesis for non-BDD tests and a lasting AGENTS.md rule req
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Hypothesis is available to Pixi and package development/CI test environments, with the lockfile updated by the relock bot.
+- [x] #1 Hypothesis is available to Pixi and package development/CI test environments, with the lockfile updated by the relock bot.
 - [x] #2 Non-BDD tests are audited and meaningful property-based coverage is added for standalone functions without weakening existing integration and regression tests.
 - [x] #3 AGENTS.md records the requested testing rule and tests and quality checks pass.
 <!-- AC:END -->
@@ -38,4 +38,12 @@ The user requested Hypothesis for non-BDD tests and a lasting AGENTS.md rule req
 
 <!-- SECTION:NOTES:BEGIN -->
 Hypothesis was added with pixi add --pypi --no-install --frozen after the normal command failed on conda-forge TLS. Lock repair must be done by the relock bot on a separately authorized PR. Added Hypothesis to the package dev extra for the Python matrix, plus the AGENTS.md property testing rule. Added generated properties for parsing, validation, metadata, capability and command discovery, LSP positions, CI scope/range selection and activation path handling; fixed integration and regression cases remain intact by user decision. Side-effectful script and CLI entry points remain covered by their existing fixed integration tests; parser internals are covered via public parse/validate properties. Unicode line-separator conversion issue found by generation is tracked separately. Verified 183 passed (one locked activation test deselected pending relock), 97.98% coverage, Python 3.11 core 114 passed, package builds and quality checks passed.
+
+PR #16 bot refreshed pixi.lock; the lock guard and locked full-CI coverage including activation tests passed on repaired commit 02e13607762e486ae6e995cfd332d5843346d892. The post-merge full CI also passed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added Hypothesis and meaningful generated properties; bot relock and locked CI passed on PR #16.
+<!-- SECTION:FINAL_SUMMARY:END -->

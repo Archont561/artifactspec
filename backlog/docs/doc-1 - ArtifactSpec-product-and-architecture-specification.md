@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 15:44'
+updated_date: '2026-11-08 16:51'
 tags:
   - specification
   - architecture
@@ -74,7 +74,7 @@ A shared validation model and LSP are desired across output formats. Diagnostics
 
 Render results should make it possible to inspect the selected representation and renderer, source-to-output provenance where feasible, warnings, approximations, and unsupported or degraded features. Behavior for unsupported requirements—error, explicit fallback, or user-approved degradation—must be designed and documented per capability.
 
-Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. The validation CLI and LSP share reference and declared-type checks; semantic content validation and explainable rendering are not yet implemented.
+Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. The validation CLI and LSP share reference and declared-type checks. The first static rendering slice exposes source provenance and limitations but does not verify visual fidelity or factual content.
 
 ## 7. Agent skills
 
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, an output-aware parser, reference and declared-type validation, and CLI and LSP diagnostics; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Phase context protocols, general semantic content validation, rendering, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings. The PyGLS dependency is locked and included in the developer environment.
+The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit selection and atomic rendering through trusted plugins. The opt-in basic plugin renders text and rectangles to SVG; it can compose image and report forms but does not render reports. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation, content-timeline semantics, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings.
 
 ## 10. Initial product acceptance goals
 
@@ -109,7 +109,7 @@ These goals describe future capability, not current completion:
 ## 11. Open design questions
 
 - Grammar beyond the first subset, richer phrase patterns, source file boundaries and imports.
-- Typed semantic IR beyond the source-level parse nodes, cross-output content contracts, composition rules, and representation selection.
+- Richer semantic content types, content-timeline semantics, cross-output contracts, composition rules, and representation selection beyond the initial static slice.
 - Core-version compatibility negotiation, plugin acquisition and approval policy.
 - Deeper incremental validation, richer LSP features, and provenance granularity.
 - Animation interpolation, time units, concurrency, narration alignment, and audio provider abstraction.
