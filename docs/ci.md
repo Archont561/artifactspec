@@ -57,4 +57,37 @@ Pixi environment using pip-audit and skips editable distributions. It is also
 run weekly in a separate scheduled workflow. It does not audit OS packages,
 conda native libraries, Bun dependencies, or GitHub Actions. Dependabot proposes
 updates for GitHub Actions, Python package metadata, and the root npm manifest; it does not update `pixi.lock`. Review
-updates and regenerate the Pixi lock where necessary.
+updates and regenerate the Pixi lock where necessary. Hatchling updates to 1.30
+or newer are temporarily ignored because the locked Twine 6.2 rejects the newer
+metadata. Upgrade and relock Twine, then verify package builds before removing
+that ignore. Existing incompatible Dependabot PRs will remain red until revised
+or closed.
+
+Bun 1.4 can use the v1 `bun.lock` format; it is kept at v1 for compatibility
+with Dependabot's older Bun updater. If regenerating the lock produces v2, use
+Bun 1.3.14 to regenerate it, then verify with `bun install --frozen-lockfile`
+using the workspace's Bun 1.4.2. Dependabot's npm update failure on the initial
+run could not be inspected in this environment, so this workaround still needs
+remote confirmation.
+
+## Sandbox publishing
+
+`.github/workflows/pixi-sandbox.yml` follows the release-pinned publisher used
+in other Archont561 repositories: on relevant pushes to `main` or manual
+invocation, it packs, verifies, and publishes `sandbox/gherkin-linux-64`.
+It uses a checksum-verified pixi-sandbox 0.9.0 release and the repository token.
+The workflow has not yet been run in this repository.
+
+This bundle contains only the isolated `gherkin` environment and the Pixi and
+pixi-sandbox tools; it is **not** a developer-environment backup. The `developer`
+bundle in `pixi-sandbox.toml` is not published by this workflow: native
+pixi-sandbox 0.9.0 rejects the local editable PyPI paths for `artifactspec` and
+`artifactspec-manim` in the default lock. Before enabling developer publishing,
+provide a supported wheel-only or separate tooling environment, regenerate the
+Pixi lock, and verify both the publisher and offline restore. Bun's installed
+`node_modules` are not packed by this Gherkin-only bundle.
+
+Once published, use the upstream pixi-sandbox restore instructions with the
+`sandbox/gherkin-linux-64` branch. No restore launcher is currently provided
+here. GitHub Actions needs permission to write repository contents for the
+publisher; publishing is not attempted on pull requests.

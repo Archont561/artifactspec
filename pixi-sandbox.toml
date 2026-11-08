@@ -1,8 +1,14 @@
-# Initial sandbox policy; generate and validate sandbox automation once pixi-sandbox is configured.
+# Developer publishing is blocked by the default environment's local PyPI paths.
 schema = 1
 branch_prefix = "sandbox"
+cargo_vendor = false
 
 [[bundle]]
 name = "developer"
 environments = ["default"]
+platforms = ["linux-64"]
+
+[[bundle]]
+name = "gherkin"
+environments = ["gherkin"]
 platforms = ["linux-64"]

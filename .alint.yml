@@ -17,6 +17,11 @@ rules:
     paths: pixi-sandbox.toml
     level: error
     message: Required pixi-sandbox.toml is missing.
+  - id: require-sandbox-workflow
+    kind: file_exists
+    paths: .github/workflows/pixi-sandbox.yml
+    level: error
+    message: Sandbox publishing workflow is missing.
   - id: require-package-manifest
     kind: file_exists
     paths: packages/artifactspec/pyproject.toml

@@ -8,10 +8,17 @@ updates:
     directory: /packages/artifactspec
     schedule:
       interval: weekly
+    # Twine 6.2 in pixi.lock cannot validate the metadata emitted by Hatchling >=1.30.
+    ignore:
+      - dependency-name: hatchling
+        versions: ['>=1.30']
   - package-ecosystem: pip
     directory: /packages/artifactspec-manim
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: hatchling
+        versions: ['>=1.30']
   - package-ecosystem: npm
     directory: /
     schedule:
