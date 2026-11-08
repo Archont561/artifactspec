@@ -25,6 +25,9 @@ Set value of title to "Hello".
 Set color of title to "navy".
 Create rectangle named box.
 Set color of box to "#aabbcc".
+Create event named opening.
+Set date of opening to "1989-11-09".
+Set value of opening to "Berlin Wall opens".
 ```
 
 Alternatively, repeat `--plugin ID` for each installed plugin you explicitly
@@ -70,6 +73,28 @@ then use `artifactspec_phrase_context`, `artifactspec_property_context`,
 `artifactspec_representation_context`, or `artifactspec_renderer_context` as
 factories. The fake renderer holds bytes in memory; it does not write files.
 
+## Calendar events and playback
+
+The opt-in basic plugin supports `event` objects with a required `date` and
+`value` (label). A date is a string in exactly `YYYY-MM-DD` format and must be
+valid in the proleptic Gregorian calendar, with years from 0001 through 9999.
+The label must contain a non-whitespace character. Values are preserved as
+semantic properties on the event node, along with source spans. Repeated
+assignments take effect in document order. An invalid date or blank event label
+is rejected during materialization; missing fields are rejected during
+composition. Static `validate` and LSP diagnostics check the registered names,
+references and declared types but do **not** execute plugin handlers, so they do
+not check calendar validity or required event fields.
+
+Events remain in creation order, even if the dates are not chronological or
+are equal. The image form displays `date — label`; the report composition uses
+`date: label`. They reuse the same semantic nodes, without sorting or assigning
+playback times. There is no separate timeline grouping, date range, approximate
+date, calendar conversion, or temporal arithmetic in this slice. Image output
+uses the existing fixed static layout, and report composition has no renderer.
+Animation and its scheduling and interpolation remain separate, future work;
+selecting the basic representation for animation fails explicitly.
+
 ## Selection, output and limitations
 
 `build_content` first validates the whole specification. No contribution
@@ -83,7 +108,7 @@ historical timeline is not an animation timeline.
 `render` requires an explicit representation, renderer and destination. It
 checks both selections before running content handlers. The registry enforces declared output compatibility; missing or incompatible
 contributions and unsupported elements fail, with **no automatic fallback**.
-The basic representation supports text and rectangles, and the SVG renderer
+The basic representation supports text, rectangles, and dated events; the SVG renderer
 supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
 text and reports this limitation; excess rows are rejected. The renderer allows
 a limited set of named colors or hexadecimal colors, rejects unsupported colors and

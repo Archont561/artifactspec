@@ -14,3 +14,9 @@ Feature: Render validated semantic content
     Given a specification file and explicitly selected built-in image plugin
     When I invoke the render command with explicit capabilities
     Then the command writes an SVG artifact and reports its provenance
+
+  Scenario: Reuse historical events without creating playback timing
+    Given a timeline of two dated events in declaration order
+    When I compose the same semantic timeline for image and report
+    Then both forms preserve the event dates and labels in declaration order
+    And the event dates are not animation playback timing

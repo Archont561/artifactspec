@@ -62,7 +62,9 @@ def main() -> None:
             run(str(console), command, "--help")
         source = root / "scene.art"
         source.write_text(
-            'Output image.\nCreate text named title.\nSet value of title to "wheel smoke".',
+            'Output image.\nCreate text named title.\nSet value of title to "wheel smoke".\n'
+            'Create event named launch.\nSet date of launch to "2000-01-01".\n'
+            'Set value of launch to "milestone".',
             encoding="utf-8",
         )
         for index, entry in enumerate(
@@ -85,7 +87,9 @@ def main() -> None:
                 str(python),
                 "-I",
                 "-c",
-                "import sys, xml.etree.ElementTree as ET; assert ET.parse(sys.argv[1]).getroot().find('{http://www.w3.org/2000/svg}text').text == 'wheel smoke'",
+                "import sys, xml.etree.ElementTree as ET; "
+                "texts = [element.text for element in ET.parse(sys.argv[1]).getroot().findall('{http://www.w3.org/2000/svg}text')]; "
+                "assert texts == ['wheel smoke', '2000-01-01 — milestone']",
                 str(destination),
             )
         run(

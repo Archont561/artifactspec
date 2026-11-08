@@ -138,3 +138,65 @@ def check_cli(state):
         .text
         == "CLI"
     )
+
+
+@given("a timeline of two dated events in declaration order")
+def timeline_spec(state):
+    from artifactspec.basic import basic_plugin
+    from artifactspec.pipeline import build_content
+    from artifactspec.plugins import Registry
+
+    registry = Registry()
+    registry.register(basic_plugin())
+    text = (
+        "Output image.\nCreate event named first.\n"
+        'Set date of first to "2001-01-01".\nSet value of first to "First".\n'
+        "Create event named second.\n"
+        'Set date of second to "1900-02-03".\nSet value of second to "Second".'
+    )
+    state["registry"] = registry
+    state["content"] = build_content(text, registry, source="timeline.art")
+
+
+@when("I compose the same semantic timeline for image and report")
+def timeline_compositions(state):
+    from artifactspec.rendering import compose
+
+    content = state["content"]
+    state["forms"] = [
+        compose(
+            content, output=output, representation="basic", registry=state["registry"]
+        )
+        for output in ("image", "report")
+    ]
+
+
+@then("both forms preserve the event dates and labels in declaration order")
+def timeline_forms(state):
+    content = state["content"]
+    assert [(n.object_type, dict(n.properties)) for n in content.nodes] == [
+        ("event", {"date": "2001-01-01", "value": "First"}),
+        ("event", {"date": "1900-02-03", "value": "Second"}),
+    ]
+    assert [[element.text for element in form.elements] for form in state["forms"]] == [
+        ["2001-01-01 — First", "1900-02-03 — Second"],
+        ["2001-01-01: First", "1900-02-03: Second"],
+    ]
+    for form in state["forms"]:
+        assert [
+            [span.start.line for span in item.provenance] for item in form.elements
+        ] == [[2, 3, 4], [5, 6, 7]]
+        assert all(
+            span.source == "timeline.art"
+            for item in form.elements
+            for span in item.provenance
+        )
+
+
+@then("the event dates are not animation playback timing")
+def no_playback(state):
+    for form in state["forms"]:
+        assert not hasattr(form, "playback")
+        assert not hasattr(form.elements[0], "time")
+    assert state["forms"][0].elements[0].y == 40
+    assert state["forms"][0].elements[1].y == 110

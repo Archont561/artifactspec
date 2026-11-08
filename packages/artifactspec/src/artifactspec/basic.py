@@ -1,6 +1,7 @@
 """An explicitly registered basic content plugin and static SVG renderer."""
 
 import re
+from datetime import date
 from html import escape
 
 from artifactspec.contexts import (
@@ -9,7 +10,7 @@ from artifactspec.contexts import (
     RendererContext,
     RepresentationContext,
 )
-from artifactspec.models import RectangleElement, TextElement
+from artifactspec.models import ContentNode, RectangleElement, TextElement
 from artifactspec.plugins import Plugin
 
 
@@ -51,6 +52,39 @@ def _color(value: str) -> str:
     return value
 
 
+_EVENT_DATE_ERROR = "event date must be a valid ISO calendar date (YYYY-MM-DD)"
+
+
+def _event_date(value: str) -> None:
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+        raise ValueError(_EVENT_DATE_ERROR)
+    try:
+        date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(_EVENT_DATE_ERROR) from exc
+
+
+def _event_label(value: str) -> None:
+    if not value.strip():
+        raise ValueError("event label must not be empty")
+
+
+def _represent_event(
+    context: RepresentationContext,
+    node: ContentNode,
+    properties: dict[str, str],
+    y: int,
+) -> None:
+    if "date" not in properties or "value" not in properties:
+        raise ValueError(f"event {node.name!r} requires date and value")
+    _event_date(properties["date"])
+    _event_label(properties["value"])
+    separator = " — " if context.output == "image" else ": "
+    context.text(
+        node.name, properties["date"] + separator + properties["value"], x=20, y=y
+    )
+
+
 def _svg(context: RendererContext) -> None:
     composition = context.composition
     parts = [
@@ -85,9 +119,20 @@ def basic_plugin() -> Plugin:
     def make_rectangle(context: PhraseContext) -> None:
         context.create("rectangle")
 
-    @plugin.property("value", target_types=("text",))
+    @plugin.phrase("event", object_type="event")
+    def make_event(context: PhraseContext) -> None:
+        context.create("event")
+
+    @plugin.property("value", target_types=("text", "event"))
     def value(context: PropertyContext) -> None:
+        if context.object_type == "event":
+            _event_label(context.value)
         context.set("value", context.value)
+
+    @plugin.property("date", target_types=("event",))
+    def event_date(context: PropertyContext) -> None:
+        _event_date(context.value)
+        context.set("date", context.value)
 
     @plugin.property("color", target_types=("text", "rectangle"))
     def color(context: PropertyContext) -> None:
@@ -100,7 +145,11 @@ def basic_plugin() -> Plugin:
         )
         for index, node in enumerate(context.content.nodes):
             properties = dict(node.properties)
-            allowed = {"value", "color"} if node.object_type == "text" else {"color"}
+            allowed = {
+                "text": {"value", "color"},
+                "rectangle": {"color"},
+                "event": {"date", "value"},
+            }.get(node.object_type, set())
             unsupported = sorted(set(properties) - allowed)
             if unsupported:
                 raise ValueError(
@@ -117,6 +166,8 @@ def basic_plugin() -> Plugin:
                     y=y,
                     color=properties.get("color", "black"),
                 )
+            elif node.object_type == "event":
+                _represent_event(context, node, properties, y)
             elif node.object_type == "rectangle":
                 if context.output == "image":
                     context.rectangle(

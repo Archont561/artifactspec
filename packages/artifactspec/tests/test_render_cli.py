@@ -193,3 +193,63 @@ def test_builtin_static_metadata_matches_runtime_plugin():
     from artifactspec.basic import basic_plugin
 
     assert basic_manifest() == basic_plugin().manifest()
+
+
+def test_cli_reports_legacy_warnings_and_explicit_no_fallback(
+    tmp_path, monkeypatch, installed_plugin_factory
+):
+    manifest = {
+        "schema_version": 1,
+        "id": "example",
+        "version": "1.0",
+        "outputs": ["image"],
+        "phrases": [{"name": "text", "outputs": []}],
+        "properties": [{"name": "value", "outputs": []}],
+        "representations": [{"name": "legacy", "outputs": []}],
+        "renderers": [{"name": "legacy-svg", "outputs": []}],
+    }
+    source_code = """from artifactspec.plugins import Plugin
+from artifactspec.basic import _svg
+plugin = Plugin("example", "1.0", outputs=("image",))
+@plugin.phrase("text")
+def create(ctx):
+    ctx.create("text")
+@plugin.property("value")
+def assign(ctx):
+    ctx.set("value", ctx.value)
+@plugin.representation("legacy")
+def layout(ctx):
+    for node in ctx.content.nodes:
+        ctx.text(node.name, dict(node.properties)["value"], x=5, y=20)
+plugin.renderer("legacy-svg")(_svg)
+"""
+    fixture = installed_plugin_factory(manifest=manifest, module_source=source_code)
+    monkeypatch.syspath_prepend(str(fixture["path"]))
+    source = tmp_path / "source.art"
+    source.write_text(
+        'Output image.\nCreate text named t.\nSet value of t to "hello".',
+        encoding="utf-8",
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "render",
+            str(source),
+            "--plugin",
+            "example",
+            "--representation",
+            "legacy",
+            "--renderer",
+            "legacy-svg",
+            "--output",
+            str(tmp_path / "image.svg"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert (data["renderer"], data["representation"], data["fallback"]) == (
+        "legacy-svg",
+        "legacy",
+        None,
+    )
+    assert any(warning["code"] == "unverified_type" for warning in data["warnings"])

@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 16:51'
+updated_date: '2026-11-08 17:36'
 tags:
   - specification
   - architecture
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit selection and atomic rendering through trusted plugins. The opt-in basic plugin renders text and rectangles to SVG; it can compose image and report forms but does not render reports. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation, content-timeline semantics, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings.
+The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit selection and atomic rendering through trusted plugins. The opt-in basic plugin renders text, rectangles and dated calendar events to SVG; it can compose image and report forms but does not render reports. Calendar events retain domain dates and declaration order without playback scheduling. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation playback, grouped or approximate timelines, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings.
 
 ## 10. Initial product acceptance goals
 
@@ -109,7 +109,7 @@ These goals describe future capability, not current completion:
 ## 11. Open design questions
 
 - Grammar beyond the first subset, richer phrase patterns, source file boundaries and imports.
-- Richer semantic content types, content-timeline semantics, cross-output contracts, composition rules, and representation selection beyond the initial static slice.
+- Richer semantic content types, grouped and approximate timelines, cross-output contracts, composition rules, and representation selection beyond the initial static slice.
 - Core-version compatibility negotiation, plugin acquisition and approval policy.
 - Deeper incremental validation, richer LSP features, and provenance granularity.
 - Animation interpolation, time units, concurrency, narration alignment, and audio provider abstraction.

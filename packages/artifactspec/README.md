@@ -5,7 +5,8 @@ capability discovery. Discovery does not import installed plugin code; plugins
 are trusted executable Python and must be approved before loading. The core also
 provides an output-aware parser and reference and declared-type validation,
 with a validation CLI and language server. Explicitly trusted plugins can
-materialize semantic content and render a small static SVG image slice.
+materialize semantic content and render a small static SVG image slice, including
+dated calendar events.
 
 ```sh
 artifactspec capabilities
