@@ -30,7 +30,8 @@ The locked Pixi workspace targets Linux x86-64 (`linux-64`). On a connected host
 with Pixi installed:
 
 ```sh
-pixi install --locked --all
+pixi install --locked
+pixi install --locked -e gherkin
 pixi run --locked bun-install
 pixi run --locked install-projects
 pixi run --locked test
@@ -45,9 +46,16 @@ number does not measure scripts or prove visual correctness. See
 [CI](docs/ci.md) for the full check matrix and coverage scope.
 
 Package test and coverage tasks install the local projects without build
-isolation, then test the checkout via `PYTHONPATH`. Run
-`pixi run --locked install-projects` when other work needs installed package
-metadata, and rerun it after changing metadata or recreating the Pixi environment.
+isolation, then test the checkout. Default-environment activation prepends both
+package source directories to `PYTHONPATH`, even from a subdirectory. Run
+`pixi run --locked install-projects` when work needs installed package metadata,
+and rerun it after changing metadata or recreating the Pixi environment.
+
+Manim is an optional PyPI dependency in the `manim` Pixi environment. After
+relocking, install it with `pixi install --locked -e manim` and use it with
+`pixi run --locked -e manim -x manim --version`. Its native ManimPango and
+PyCairo bindings and FFmpeg are supplied by conda-forge. This does not implement
+the ArtifactSpec renderer or make Manim a distribution dependency.
 
 ### Development container
 
@@ -55,8 +63,11 @@ Open the repository in a Dev Containers-compatible editor and choose **Reopen in
 Container**. The container targets Linux x86-64 and requires network access on
 first creation. Setup installs Git, GitHub CLI, pixi-sandbox, both locked Pixi
 environments, Bun tooling, and the local packages. Global tools are separate
-from `pixi.lock`. Git hooks are not installed automatically; opt in with
-`pixi run hooks-install`.
+from `pixi.lock`. Container setup does not install Git hooks automatically;
+run `pixi run install-hooks` to check and install them. Agents must do this at
+session start (see [AGENTS.md](AGENTS.md)). Lefthook backs up pre-existing
+non-Lefthook hooks as `.old` files, which it does not run automatically; integrate
+any needed custom hooks separately.
 
 OpenCode is optional: set `ARTIFACTSPEC_INSTALL_OPENCODE=1` on the host before
 creating the container to install it. Authentication and model refresh remain

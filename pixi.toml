@@ -26,13 +26,16 @@ twine = ">=6.2, <7"
 pip-audit = ">=2.9, <3"
 packaging = ">=26, <27"
 
+[activation]
+scripts = ["scripts/activate.sh"]
+
 [tasks]
 # Install only local project wheels, without dependency resolution or network access.
 install-projects = "python -m pip install --no-deps --no-build-isolation --force-reinstall ./packages/artifactspec ./packages/artifactspec-manim"
-test = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec/tests", depends-on = ["install-projects"] }
+test = { cmd = "python -m pytest packages/artifactspec/tests", depends-on = ["install-projects"] }
 test-scripts = "python -m pytest scripts/tests"
-test-manim = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
-coverage-all = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
+test-manim = { cmd = "python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
+coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
 lint = "ruff check ."
 format-check = "ruff format --check ."
 typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src"
@@ -40,12 +43,24 @@ audit = "pip-audit --local --skip-editable"
 check-packages = "python scripts/check_packages.py"
 alint = "alint check"
 actionlint = "actionlint .github/workflows/*.yml"
-hooks-install = "lefthook install"
-coverage = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec/tests --cov=packages/artifactspec/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
+install-hooks = "sh scripts/install_hooks.sh"
+# Backwards-compatible alias.
+hooks-install = { depends-on = ["install-hooks"] }
+coverage = { cmd = "python -m pytest packages/artifactspec/tests --cov=packages/artifactspec/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
 lint-commit = "convco check --from-stdin --strip"
 bun-install = "bun install --frozen-lockfile"
 backlog = { cmd = "bun x --bun --no-install backlog", depends-on = ["bun-install"] }
 skills = { cmd = "bun x --bun --no-install skills", depends-on = ["bun-install"] }
+
+# Keep the heavyweight renderer optional and outside the developer sandbox.
+# Use prebuilt native bindings so PyPI's Manim doesn't build its sdists locally.
+[feature.manim.dependencies]
+manimpango = ">=0.7,<1"
+pycairo = ">=1.14,<2"
+ffmpeg = ">=7,<9"
+
+[feature.manim.pypi-dependencies]
+manim = ">=0.22.1, <0.23"
 
 # Isolate gherlint 0.5 and its Pydantic 1 dependency.
 [feature.gherkin.dependencies]
@@ -59,3 +74,4 @@ lint-features = "python scripts/check_gherkin.py"
 
 [environments]
 gherkin = { features = ["gherkin"], no-default-feature = true }
+manim = { features = ["manim"] }

@@ -44,4 +44,5 @@ def test_package_tests_install_local_projects_without_editable_lock_entries():
     assert "--no-deps" in install
     for name in ("test", "test-manim", "coverage", "coverage-all"):
         assert "install-projects" in tasks[name]["depends-on"]
-        assert "PYTHONPATH=" in tasks[name]["cmd"]
+        assert "PYTHONPATH=" not in tasks[name]["cmd"]
+    assert manifest["activation"]["scripts"] == ["scripts/activate.sh"]
