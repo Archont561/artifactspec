@@ -46,8 +46,10 @@ number does not measure scripts or prove visual correctness. See
 [CI](docs/ci.md) for the full check matrix and coverage scope.
 
 Package test and coverage tasks install the local projects without build
-isolation, then test the checkout. Default-environment activation prepends both
-package source directories to `PYTHONPATH`, even from a subdirectory. Run
+isolation, then test the checkout. Default-environment activation discovers each
+tracked or unignored `pyproject.toml` with a `src` directory and prepends those
+source directories to `PYTHONPATH`, even from a subdirectory. Git-ignored
+projects and projects without `src` are skipped. Run
 `pixi run --locked install-projects` when work needs installed package metadata,
 and rerun it after changing metadata or recreating the Pixi environment.
 

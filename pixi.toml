@@ -26,8 +26,10 @@ twine = ">=6.2, <7"
 pip-audit = ">=2.9, <3"
 packaging = ">=26, <27"
 
-[activation]
-scripts = ["scripts/activate.sh"]
+# Pixi evaluates activation.env in the platform shell. Disable word splitting and
+# globbing inside the substitution so checkout paths containing spaces are safe.
+[activation.env]
+PYTHONPATH = '$(IFS=; set -f; python ${PIXI_PROJECT_ROOT}/scripts/activate.py)'
 
 [tasks]
 # Install only local project wheels, without dependency resolution or network access.
