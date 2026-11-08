@@ -79,7 +79,14 @@ def capabilities(*, details: bool = False, output: str | None = None) -> dict[st
                 "version": manifest["version"],
                 "outputs": manifest["outputs"],
                 "capabilities": {
-                    kind: manifest[kind] if details else len(manifest[kind])
+                    kind: (
+                        [
+                            {"name": entry["name"], "outputs": entry["outputs"]}
+                            for entry in manifest[kind]
+                        ]
+                        if details
+                        else len(manifest[kind])
+                    )
                     for kind in KINDS
                 },
             }

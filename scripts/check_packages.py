@@ -75,7 +75,11 @@ def main() -> None:
             "document = parse('Output image.\\nCreate circle named sun.\\n"
             'Set label of sun to \\"hello\\".\', registry); '
             "assert document.statements[0].name == 'sun'; "
-            "assert document.statements[1].value.value == 'hello'",
+            "assert document.statements[1].value.value == 'hello'; "
+            "from artifactspec.validation import validate; "
+            "assert validate('Output image.', registry).valid; "
+            "from artifactspec.lsp import create_server; "
+            "assert create_server(registry) is not None",
         )
 
 

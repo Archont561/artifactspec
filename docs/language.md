@@ -3,8 +3,8 @@
 This page defines the initial implemented syntax and the intended semantic
 contracts. Parsing is not validation or rendering: it does not resolve references,
 execute plugin handlers, infer facts, or guarantee that a renderer exists. The
-validation CLI, semantic analysis, plugin phase contexts, and all rendering are
-future work.
+validation CLI and language server share semantic reference and type checks;
+plugin phase contexts and rendering are future work.
 
 ## Implemented syntax
 
@@ -95,7 +95,7 @@ document = parse(
 The registered handlers in this example are placeholders and are not run by
 `parse`; actual phase contexts and invocation are future work.
 
-## Reference semantics (specified, not yet implemented)
+## Reference semantics
 
 The document is the only scope. Names are case-sensitive; a semantic validator
 must reject duplicate definitions and unresolved or ambiguous names. A named
@@ -107,13 +107,23 @@ by this contract; resolution occurs only after the complete document is availabl
 change it. It starts unset for each new document, and a use before any creation
 must produce a source-linked diagnostic, not guess. A new document resets `it`;
 the only output header must start the document, so it is not a nested scope.
-The parser preserves references and does not check these semantic rules yet.
+The parser preserves references; `artifactspec.validation.validate` checks these
+rules and returns a `ValidationResult` containing diagnostics and resolved
+references. Duplicate names, unresolved and ambiguous references are errors.
+Version 2 plugin metadata permits exact object-type checking for properties;
+legacy version 1 metadata produces `unverified_type` warnings rather than a
+false claim that the types were checked. A result is valid if it has no errors;
+warnings must still be reviewed. Validation does not execute plugin handlers or
+prove factual correctness, rendering support, or visual quality. Syntax errors
+currently stop parsing at the first error; multiple independent semantic errors
+can be reported together.
 
 ## Typed artifact boundaries (design contract)
 
 The parse `Document` is a source-level representation, not validated semantic
-content. Future semantic analysis resolves references and types into typed
-**content**, whose meaning is independent of any particular renderer. A
+content. The validator resolves references and checks declared target types, but
+does not yet produce typed semantic **content** for renderers. Future semantic
+content will have meaning independent of any particular renderer. A
 **representation** selects how that content is expressed for an output; a
 **composition** arranges representations and, for animation, playback states;
 a **renderer** consumes an approved composition and produces artifacts plus
@@ -155,3 +165,36 @@ represent many-to-many provenance, validate units and property types, negotiate
 plugin/core compatibility, select representations, and approve fallbacks remains
 open. The example flows above are design illustrations, not supported syntax or
 claims of rendering capability.
+
+## Validation CLI
+
+Run `artifactspec validate path/to/scene.art` for human-readable diagnostics, or
+use `--format json` for the stable version 1 JSON envelope:
+
+```json
+{"schema_version": 1, "valid": false, "diagnostics": [{"code": "unresolved_reference", "severity": "error", "message": "No object named 'sun'; declare it in this document.", "span": {"source": "scene.art", "start": {"line": 2, "column": 14}, "end": {"line": 2, "column": 17}}}]}
+```
+
+Positions are one-based Unicode code points and span ends are exclusive. Exit
+status 0 means no errors (warnings can still be present), 1 means validation
+errors, and 2 means an input, metadata, or command-line error. Input is UTF-8.
+Diagnostics go to standard output; operational errors go to standard error.
+Multiple semantic errors are reported together, but syntax parsing currently
+stops at the first error. Installed capabilities are discovered from static
+manifests; the command does not load plugins or execute handlers. Legacy
+version 1 manifests produce warnings where type information is missing.
+
+## Editor diagnostics
+
+Run `artifactspec lsp` as a language server over standard input and output. It
+loads installed static manifests at startup, uses the same validator and
+validation codes as the CLI, and does not import plugin modules. Configure an
+LSP client to start that command for ArtifactSpec documents; the server does not
+register a file extension or install editor configuration. Restart it after
+installing or changing plugins so that it can rediscover their metadata.
+
+The server validates on document open and change, and clears diagnostics on
+close. Both full and incremental changes are supported; LSP positions use the
+encoding negotiated with the client (UTF-16 by default). Warnings and errors
+are distinguished. Parsing remains first-error, and independent semantic
+errors are collected. No renderer or plugin handler runs as part of validation.
