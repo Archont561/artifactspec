@@ -2,8 +2,9 @@
 
 The core package provides decorator-based plugin registration and static
 capability discovery. Discovery does not import installed plugin code; plugins
-are trusted executable Python and must be approved before loading. The artifact
-language, phase contexts, validation and rendering are not implemented yet.
+are trusted executable Python and must be approved before loading. The core also
+provides an output-aware parser at `artifactspec.parser`; semantic validation,
+phase contexts, and rendering are not implemented yet.
 
 ```sh
 artifactspec capabilities
@@ -13,7 +14,9 @@ artifactspec capabilities --details --output svg
 The package root exports `VERSION`, read from installed distribution metadata.
 Plugin interfaces live in `artifactspec.plugins`. See the
 [plugin contract](https://github.com/Archont561/artifactspec/blob/main/docs/plugins.md)
-for manifest format, trust boundaries, registration and CLI JSON schema.
+for manifest format, trust boundaries, registration and CLI JSON schema. See the
+[language contract](https://github.com/Archont561/artifactspec/blob/main/docs/language.md)
+for parser syntax, typed nodes and source spans.
 
 The repository's `pixi run --locked test` task installs the local packages and
 runs the core package's BDD and unit tests against current source. Reinstall

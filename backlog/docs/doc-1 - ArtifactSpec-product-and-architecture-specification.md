@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 14:06'
+updated_date: '2026-11-08 14:43'
 tags:
   - specification
   - architecture
@@ -46,9 +46,9 @@ Representation choice, backend limitations, and fallback behavior should be expl
 
 The language should be concise, controlled natural language: primarily declarative sentences with predictable, registered patterns. Plugins may contribute nouns, verbs, phrases, and output-specific commands. Avoid making users write verbose programming-like calls, `custom(...)` expressions, or deeply nested object structures as the primary authoring model.
 
-Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. An `it` reference to the most recently defined object is preferred; its precise scoping, reset rules, and behavior in ambiguous contexts remain open.
+Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. The first subset specifies `it` as the most recently created object in the same document; resolution and validation remain future work. See `docs/language.md`.
 
-The authoring model may resemble Gherkin in readability, but is not required to be Gherkin syntax or compatible with Gherkin tooling. Any examples of future language syntax are illustrative until a grammar and semantics are adopted.
+The authoring model may resemble Gherkin in readability, but is not required to be Gherkin syntax or compatible with Gherkin tooling. The initial `Output`, `Create`, and `Set` grammar is implemented as a source-linked parser; other proposed syntax is illustrative.
 
 Semantic validation does **not** prove that content is factually correct or visually effective. Those concerns require separate checks and, where appropriate, human review.
 
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static installed plugin manifests, and JSON capability discovery; see `docs/plugins.md`. The Manim package remains a version-only scaffold. The language, phase context protocols, validation, renderer, narration, timing synchronization, LSP, and skill installer are not implemented. The expanded test matrix requires verification on GitHub.
+The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, and an output-aware typed parser; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Semantic reference resolution, phase context protocols, validation, renderer, narration, timing synchronization, LSP, and skill installer are not implemented. The expanded test matrix requires verification on GitHub.
 
 ## 10. Initial product acceptance goals
 
@@ -108,8 +108,8 @@ These goals describe future capability, not current completion:
 
 ## 11. Open design questions
 
-- Grammar, phrase registration and conflict resolution; precise `it` scope; source file boundaries and imports.
-- Typed IR, cross-output content contracts, composition rules, and representation selection.
+- Grammar beyond the first subset, richer phrase patterns, source file boundaries and imports.
+- Typed semantic IR beyond the source-level parse nodes, cross-output content contracts, composition rules, and representation selection.
 - Core-version compatibility negotiation, plugin acquisition and approval policy.
 - LSP protocol integration, diagnostics format, incremental validation, and provenance granularity.
 - Animation interpolation, time units, concurrency, narration alignment, and audio provider abstraction.

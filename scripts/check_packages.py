@@ -65,7 +65,14 @@ def main() -> None:
             "assert artifactspec.VERSION == version('artifactspec'); "
             "assert artifactspec_manim.VERSION == version('artifactspec-manim'); "
             "assert artifactspec.__all__ == ['VERSION']; "
-            "assert artifactspec_manim.__all__ == ['VERSION']",
+            "assert artifactspec_manim.__all__ == ['VERSION']; "
+            "from artifactspec.parser import parse; "
+            "from artifactspec.plugins import Plugin, Registry; "
+            "plugin = Plugin('example', '1', outputs=('image',)); "
+            "plugin.phrase('circle')(lambda context: None); "
+            "registry = Registry(); registry.register(plugin); "
+            "assert parse('Output image.\\nCreate circle named sun.', registry)"
+            ".statements[0].name == 'sun'",
         )
 
 

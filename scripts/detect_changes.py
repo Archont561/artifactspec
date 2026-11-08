@@ -64,26 +64,18 @@ def main() -> int:
     args = parser.parse_args()
     result = detect(args.repo, args.base, args.head, args.event)
     scope = result["scope"]
+    run_docs = scope == "docs" or (
+        scope == "scripts" and any(kind(path) == "docs" for path in result["paths"])
+    )
     # Simple scalar fields are safe to pass between GitHub Actions jobs.
     flags = {
         "scope": scope,
         "run_full": str(scope == "full").lower(),
         "run_scripts": str(scope == "scripts").lower(),
-        "run_docs": str(
-            scope == "docs"
-            or (scope == "scripts" and any(kind(p) == "docs" for p in result["paths"]))
-        ).lower(),
+        "run_docs": str(run_docs).lower(),
         "skip_full": str(scope != "full").lower(),
         "skip_scripts": str(scope != "scripts").lower(),
-        "skip_docs": str(
-            not (
-                scope == "docs"
-                or (
-                    scope == "scripts"
-                    and any(kind(p) == "docs" for p in result["paths"])
-                )
-            )
-        ).lower(),
+        "skip_docs": str(not run_docs).lower(),
         "skip_coverage": str(scope != "full").lower(),
     }
     for variable in ("GITHUB_OUTPUT", "GITHUB_ENV"):
