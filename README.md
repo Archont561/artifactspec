@@ -28,9 +28,9 @@ or rebuild the package after changing it. Each package has a BDD test for this
 contract. Script tests live in `scripts/tests/`.
 
 See [CI](docs/ci.md) and [release preparation](docs/releases.md) for
-compatibility, security, and packaging checks. `pixi-sandbox.toml` is an
-initial policy; sandbox automation has not been generated. Examples remain
-empty until the API is stable.
+compatibility, security, packaging checks, and sandbox publishing. The current
+sandbox publisher covers only Gherkin tooling, not the developer environment.
+Examples remain empty until the API is stable.
 
 ## License
 
