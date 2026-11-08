@@ -33,6 +33,7 @@ Do not push, create a pull request, merge, tag, publish, or release without expl
 
 - Keep product features and tests in the package that owns the behavior. Repository scripts live under root `scripts/`, with their tests and script-specific features under `scripts/tests/`; do not put script tests in product packages.
 - For user-visible features, write a Gherkin scenario and a failing test in the owning package (or in `scripts/tests/` for repository scripts) before implementation when practical.
+- Property-test standalone functions wherever practical using varied cases, with Hypothesis or `pytest.mark.parametrize`. Keep BDD scenarios and example-based integration or regression tests where generated cases are not appropriate; do not replace meaningful assertions with arbitrary inputs.
 - When implementing a new feature with TDD and BDD, apply `.agents/skills/clean-code-principles/SKILL.md` throughout. After the behavior is green and before the session handoff, review the changed Python files using `.agents/skills/refactor/SKILL.md`, make safe behavior-preserving improvements as appropriate, run the relevant checks, and report any remaining findings.
 - Keep the CLI thin and public plugin interfaces testable without renderers.
 - Keep examples empty until the public API is stable.

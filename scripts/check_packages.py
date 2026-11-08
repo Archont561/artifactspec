@@ -56,6 +56,10 @@ def main() -> None:
             "Scripts/artifactspec.exe" if os.name == "nt" else "bin/artifactspec"
         )
         run(str(console), "capabilities", "--details")
+        # Both installed entry points must discover every built-in command module.
+        for command in ("capabilities", "validate", "lsp"):
+            run(str(python), "-I", "-m", "artifactspec", command, "--help")
+            run(str(console), command, "--help")
         run(
             str(python),
             "-I",

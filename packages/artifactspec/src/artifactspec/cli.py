@@ -1,95 +1,69 @@
-"""Typer application for static capability discovery."""
+"""Discover and register built-in Typer applications."""
 
-import json
-from dataclasses import asdict
-from enum import Enum
-from pathlib import Path
-from typing import Annotated
+from importlib import import_module
+from pkgutil import iter_modules
 
 import typer
+from typer.main import get_command_name, solve_typer_info_defaults
 
-from artifactspec.discovery import capabilities, installed_plugins
-from artifactspec.plugins import ManifestCatalog, RegistrationError
-from artifactspec.validation import validate
-
-
-class OutputFormat(str, Enum):
-    text = "text"
-    json = "json"
+from artifactspec import commands
 
 
-app = typer.Typer(add_completion=False, no_args_is_help=True)
-
-
-@app.callback()
-def main() -> None:
-    """Discover installed ArtifactSpec plugin capabilities."""
-
-
-@app.command("capabilities")
-def show_capabilities(
-    details: Annotated[
-        bool, typer.Option("--details", help="Include individual contributions.")
-    ] = False,
-    output: Annotated[
-        str | None, typer.Option("--output", help="Filter by output name.")
-    ] = None,
+def _check_command_tree(
+    app: typer.Typer, names: set[str], path: tuple[str, ...], ancestors: set[int]
 ) -> None:
-    """Discover installed plugin capabilities without loading plugin code."""
-    try:
-        result = capabilities(details=details, output=output)
-    except RegistrationError as exc:
-        typer.echo(f"artifactspec: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(json.dumps(result, sort_keys=True))
+    """Reject collisions that Typer would otherwise silently overwrite."""
+    if id(app) in ancestors:
+        raise ValueError(f"Cyclic CLI command group at {' '.join(path) or '<root>'}")
+    ancestors = ancestors | {id(app)}
+
+    def claim(name: str) -> None:
+        if name in names:
+            raise ValueError(f"Duplicate CLI command {' '.join((*path, name))!r}")
+        names.add(name)
+
+    for command in app.registered_commands:
+        if command.callback is None:
+            raise ValueError("CLI command must have a callback")
+        claim(command.name or get_command_name(command.callback.__name__))
+    for group in app.registered_groups:
+        child = group.typer_instance
+        if child is None:
+            raise ValueError("CLI command group must have a Typer app")
+        info = solve_typer_info_defaults(group)
+        if info.name:
+            claim(info.name)
+            _check_command_tree(child, set(), (*path, info.name), ancestors)
+        else:
+            # Typer flattens unnamed apps and does not execute their callbacks.
+            if info.callback is not None:
+                raise ValueError(
+                    "Unnamed CLI command groups cannot have callbacks; give the group a name"
+                )
+            _check_command_tree(child, names, path, ancestors)
 
 
-@app.command("validate")
-def validate_file(
-    path: Annotated[Path, typer.Argument(help="UTF-8 ArtifactSpec file to validate.")],
-    format: Annotated[
-        OutputFormat, typer.Option("--format", help="Diagnostic output format.")
-    ] = OutputFormat.text,
-) -> None:
-    """Validate a specification using installed static plugin metadata."""
-    try:
-        text = path.read_text(encoding="utf-8")
-        catalog = ManifestCatalog(item[1] for item in installed_plugins().values())
-        result = validate(text, catalog, source=str(path))
-    except (OSError, UnicodeError, RegistrationError) as exc:
-        typer.echo(f"artifactspec: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
-    if format == OutputFormat.json:
-        typer.echo(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "valid": result.valid,
-                    "diagnostics": [asdict(item) for item in result.diagnostics],
-                },
-                sort_keys=True,
-                ensure_ascii=False,
+def create_app() -> typer.Typer:
+    """Build the app from public, first-party command modules."""
+    app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+    @app.callback()
+    def main() -> None:
+        """Discover installed ArtifactSpec plugin capabilities."""
+
+    modules = sorted(iter_modules(commands.__path__), key=lambda item: item.name)
+    for info in modules:
+        if info.ispkg or info.name.startswith("_"):
+            continue
+        module = import_module(f"{commands.__name__}.{info.name}")
+        module_app = getattr(module, "app", None)
+        if not isinstance(module_app, typer.Typer):
+            raise TypeError(
+                f"Invalid CLI command module {module.__name__!r}: expected a Typer app"
             )
-        )
-    else:
-        for item in result.diagnostics:
-            position = item.span.start
-            typer.echo(
-                f"{item.span.source}:{position.line}:{position.column}: {item.severity} [{item.code}]: {item.message}"
-            )
-        if result.valid and not result.diagnostics:
-            typer.echo(f"{path}: valid")
-    if not result.valid:
-        raise typer.Exit(code=1)
+        app.add_typer(module_app)
+    _check_command_tree(app, set(), (), set())
+    return app
 
 
-@app.command("lsp")
-def language_server() -> None:
-    """Run the language server over standard input and output."""
-    from artifactspec.lsp import start
-
-    try:
-        start()
-    except RegistrationError as exc:
-        typer.echo(f"artifactspec: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+app = create_app()

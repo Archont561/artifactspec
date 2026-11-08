@@ -45,6 +45,28 @@ restore procedure, see [CI](docs/ci.md).
    remain unimplemented or unverified. Keep `examples/` empty until the public
    API is stable.
 
+## Built-in CLI commands
+
+Each public Python module directly inside
+`packages/artifactspec/src/artifactspec/commands/` exposes an `app = typer.Typer()`.
+Use `@app.command()` for one or more commands, and `app.add_typer()` for nested
+command groups. `cli.py` discovers modules in sorted order and registers each
+app directly; adding commands requires no change to the entry point. Unnamed
+module apps contribute their commands at the root (so existing commands such
+as `artifactspec validate FILE` stay unchanged). A named module app, for example
+`typer.Typer(name="tools")`, registers a group instead. Name groups that need
+callbacks or group options: Typer cannot run callbacks on unnamed, flattened
+apps, so those are rejected. Nested groups retain their own names, callbacks,
+options and commands. Duplicate names at the same command-tree level, cyclic
+apps, and missing or invalid module apps fail explicitly at startup. Module
+names beginning with `_` and subpackages are ignored. Add package-local tests
+and documentation for new commands.
+
+This is for trusted, built-in code: discovery **imports and executes** the
+command modules. It is separate from installed plugin discovery, which continues
+to read static metadata without importing plugins. Adding third-party CLI
+commands through this mechanism is not supported or sandboxed.
+
 ## Checks
 
 Run the checks relevant to your change; the full CI suite includes:
