@@ -77,6 +77,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          pixi-version: v0.84.1
+          locked: true
+      - run: pixi run --locked lint-prose
+      - run: pixi run --locked alint
       - name: Check whitespace in changed files
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -126,6 +132,7 @@ jobs:
       - run: pixi run --locked check-packages
       - run: pixi run --locked audit
       - run: pixi run --locked alint
+      - run: pixi run --locked lint-prose
       - run: pixi run --locked actionlint
       - run: pixi run --locked -e gherkin lint-features
       - run: pixi run --locked coverage-all

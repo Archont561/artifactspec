@@ -100,3 +100,18 @@ using rebase merge only, not merge commits or squash merges.
 Do not commit credentials, generated distributions, or local environments. Release
 and publishing steps require separate authorization; see
 [release preparation](docs/releases.md).
+
+## Documentation quality
+
+Run `pixi run --locked lint-prose` to check spelling, project terminology, and
+selected editorial rules in the root guides, package READMEs, `docs/`, and
+Markdown under `backlog/`. Errors fail the check; review warnings where useful.
+The backlog uses a smaller editorial rule set. Preserve technical meaning and
+examples, and add legitimate project vocabulary rather than suppressing errors.
+
+Use `pixi run --locked alint` for repository structure and configuration. The
+Vale and alint configurations are independent. Vale 3.26.0 is pinned through
+Bun for the Linux x86-64 developer environment. The first Bun install requires
+network access; the binary is not included in the offline Pixi sandbox. Selected
+upstream style rules are vendored, so routine checks do not run `vale sync`.
+See `.vale/styles/README.md` for sources and update instructions.

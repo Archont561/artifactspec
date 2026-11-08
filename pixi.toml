@@ -39,15 +39,16 @@ PYTHONPATH = '$(IFS=; set -f; python ${PIXI_PROJECT_ROOT}/scripts/activate.py)'
 # Install only local project wheels, without dependency resolution or network access.
 install-projects = "python -m pip install --no-deps --no-build-isolation --force-reinstall ./packages/artifactspec ./packages/artifactspec-manim"
 test = { cmd = "python -m pytest packages/artifactspec/tests", depends-on = ["install-projects"] }
-test-scripts = "python -m pytest scripts/tests"
+test-scripts = { cmd = "python -m pytest scripts/tests", depends-on = ["bun-install"] }
 test-manim = { cmd = "python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
-coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
+coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects", "bun-install"] }
 lint = "ruff check ."
 format-check = "ruff format --check ."
 typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src"
 audit = "pip-audit --local --skip-editable"
 check-packages = "python scripts/check_packages.py"
 alint = "alint check"
+lint-prose = { cmd = "node_modules/@taskless/vale-linux-x64/vale --no-global README.md AGENTS.md CONTRIBUTING.md CHANGELOG.md docs backlog packages/*/README.md", depends-on = ["bun-install"] }
 actionlint = "actionlint .github/workflows/*.yml"
 install-hooks = "sh scripts/install_hooks.sh"
 # Backwards-compatible alias.

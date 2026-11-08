@@ -5,9 +5,9 @@ JSON plus scalar flags to `GITHUB_OUTPUT` and `GITHUB_ENV` when present. The
 workflow consumes job outputs; environment values are local to their job.
 
 - Only `docs/`, `backlog/`, root README/CHANGELOG, or a package README: run the
-  docs whitespace check, not Python package suites.
+  prose, repository, and docs whitespace checks, not Python package suites.
 - Only `scripts/` (including its `scripts/tests/` suite), optionally with docs:
-  run the scripts suite; also check changed docs whitespace when present.
+  run the scripts suite; also run documentation checks when docs are present.
   Package paths, including any `tests/scripts/` paths, trigger full CI.
 - Any other change, an empty diff, a missing base, or a failed comparison: run
   full checks. Git renames are treated as deletion plus addition so moving code
@@ -118,3 +118,13 @@ Actions needs permission to write repository contents for the publisher;
 publishing is not attempted on pull requests. Both publishing and offline restore
 have succeeded. The optional Manim environment is checked separately in CI and
 is not included in the offline developer bundle.
+
+## Prose and repository checks
+
+Documentation-only CI runs `pixi run --locked lint-prose` and
+`pixi run --locked alint` as well as the whitespace check. Full CI runs the
+same prose and repository checks. Vale errors fail CI; warnings are advisory.
+The prose task checks root guides, package READMEs, `docs/`, and Markdown under
+`backlog/`. It uses a pinned Linux x86-64 Vale binary from the Bun lockfile,
+which is installed separately from the offline Pixi sandbox. The selected
+upstream style rules and their licenses are vendored; see `.vale/styles/README.md`.

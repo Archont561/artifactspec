@@ -10,6 +10,8 @@ pre-commit:
       run: pixi run --locked typecheck
     - name: gherkin-lint
       run: pixi run --locked -e gherkin lint-features
+    - name: prose-lint
+      run: pixi run --locked lint-prose
     - name: repository-policy
       run: pixi run --locked alint
     - name: workflow-lint
