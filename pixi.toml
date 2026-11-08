@@ -13,9 +13,8 @@ actionlint = ">=1.7,<2"
 shellcheck = ">=0.11,<1"
 
 [pypi-dependencies]
-# Keep these constraints aligned with the published package metadata.
-artifactspec = { path = "./packages/artifactspec", editable = true, extras = ["dev"] }
-artifactspec-manim = { path = "./packages/artifactspec-manim", editable = true }
+# The build backend is locked so local projects can be installed without network.
+hatchling = ">=1.27,<1.30"
 pytest = ">=8,<10"
 pytest-bdd = ">=8,<10"
 pytest-cov = ">=6,<8"
@@ -28,10 +27,12 @@ pip-audit = ">=2.9, <3"
 packaging = ">=26, <27"
 
 [tasks]
-test = "python -m pytest packages/artifactspec/tests"
+# Install only local project wheels, without dependency resolution or network access.
+install-projects = "python -m pip install --no-deps --no-build-isolation --force-reinstall ./packages/artifactspec ./packages/artifactspec-manim"
+test = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec/tests", depends-on = ["install-projects"] }
 test-scripts = "python -m pytest scripts/tests"
-test-manim = "python -m pytest packages/artifactspec-manim/tests"
-coverage-all = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml"
+test-manim = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
+coverage-all = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
 lint = "ruff check ."
 format-check = "ruff format --check ."
 typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src"
@@ -40,7 +41,7 @@ check-packages = "python scripts/check_packages.py"
 alint = "alint check"
 actionlint = "actionlint .github/workflows/*.yml"
 hooks-install = "lefthook install"
-coverage = "python -m pytest packages/artifactspec/tests --cov=packages/artifactspec/src --cov-report=term-missing --cov-report=xml:coverage.xml"
+coverage = { cmd = "PYTHONPATH=packages/artifactspec/src:packages/artifactspec-manim/src python -m pytest packages/artifactspec/tests --cov=packages/artifactspec/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects"] }
 lint-commit = "convco check --from-stdin --strip"
 bun-install = "bun install --frozen-lockfile"
 backlog = { cmd = "bun x --bun --no-install backlog", depends-on = ["bun-install"] }
