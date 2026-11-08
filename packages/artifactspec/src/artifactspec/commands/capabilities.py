@@ -5,8 +5,8 @@ from typing import Annotated
 
 import typer
 
-from artifactspec.discovery import capabilities
 from artifactspec.plugins import RegistrationError
+from artifactspec.plugins.discovery import capabilities
 
 app = typer.Typer()
 

@@ -1,5 +1,6 @@
 import pytest
 
+from artifactspec.core.validation import validate
 from artifactspec.plugins import (
     ManifestCatalog,
     Plugin,
@@ -7,7 +8,6 @@ from artifactspec.plugins import (
     Registry,
     validate_manifest,
 )
-from artifactspec.validation import validate
 
 
 @pytest.fixture
@@ -144,7 +144,7 @@ def test_bad_syntax_returns_source_linked_error(typed_registry):
 def test_installed_version_two_manifest_never_imports_plugin(
     installed_plugin_factory, monkeypatch
 ):
-    from artifactspec.discovery import installed_plugins
+    from artifactspec.plugins.discovery import installed_plugins
 
     manifest = {
         "schema_version": 2,
@@ -216,7 +216,7 @@ def test_cli_reports_missing_file_without_fake_validation_result(tmp_path):
 def test_capability_json_v1_remains_stable_for_v2_plugins(
     installed_plugin_factory, monkeypatch
 ):
-    from artifactspec.discovery import capabilities
+    from artifactspec.plugins.discovery import capabilities
 
     manifest = {
         "schema_version": 2,

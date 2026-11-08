@@ -1,12 +1,13 @@
 # ArtifactSpec core
 
 The core package provides decorator-based plugin registration and static
-capability discovery. Discovery does not import installed plugin code; plugins
-are trusted executable Python and must be approved before loading. The core also
-provides an output-aware parser and reference and declared-type validation,
-with a validation CLI and language server. Explicitly trusted plugins can
-materialize semantic content and render a small static SVG image slice, including
-dated calendar events.
+capability discovery. Discovery does not import installed plugin code; rendering
+automatically loads installed plugins, which are executable Python and are not
+sandboxed. Install only trusted plugins, or disable autoload to select them
+explicitly. The core also provides an output-aware parser and reference and
+declared-type validation, with a validation CLI and language server. Plugins can
+materialize semantic content, including dated calendar events. The optional
+`artifactspec-svg` distribution renders the small static SVG image slice.
 
 ```sh
 artifactspec capabilities

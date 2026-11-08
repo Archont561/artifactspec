@@ -27,11 +27,11 @@ A manual run without a base checks commits since the default branch's merge base
 when run on another branch, or all reachable commits on the default branch. An
 unavailable change-scope comparison still runs full CI.
 
-Full CI runs coverage across both packages and uploads `coverage.xml` with the
+Full CI runs coverage across all three packages and uploads `coverage.xml` with the
 Codecov action. Configure the `CODECOV_TOKEN` repository secret where required by
 Codecov. Fork pull requests still run coverage but skip the upload, since secrets
 are not generally available to them. The coverage.py configuration fails reports
-below 91% total line coverage across the two package source trees; the full CI job
+below 91% total line coverage across the three package source trees; the full CI job
 uses this same gate before upload. The separate core-only `coverage` task applies
 the threshold to the core package alone. Script tests are run, but script code is
 not included in this coverage figure. Coverage uses subprocess instrumentation to
@@ -101,7 +101,7 @@ and pixi-sandbox. The optional `manim` environment is not packed; it uses the
 PyPI Manim distribution with conda-forge's prebuilt ManimPango and PyCairo
 bindings and FFmpeg. Local project source paths are deliberately not Pixi
 requirements, because native pixi-sandbox only transports locked wheels.
-`pixi run install-projects` installs both local projects as non-editable packages
+`pixi run install-projects` installs all three local projects as non-editable packages
 using the locked Hatchling backend and without dependency resolution or build
 isolation. Package-test and coverage tasks run this first; default-environment
 activation discovers tracked or unignored Python projects with `src` directories

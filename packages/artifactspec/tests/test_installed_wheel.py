@@ -23,7 +23,7 @@ def test_installed_wheel_manifest_is_discovered_without_importing(tmp_path):
         "phrases": [],
         "properties": [],
         "representations": [],
-        "renderers": [{"name": "svg", "outputs": ["svg"]}],
+        "renderers": [{"name": "wheel-svg", "outputs": ["svg"]}],
     }
     (package / "artifactspec_plugins" / "wheel-example.json").write_text(
         json.dumps(manifest), encoding="utf-8"
@@ -63,7 +63,11 @@ def test_installed_wheel_manifest_is_discovered_without_importing(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    plugin = json.loads(result.stdout)["plugins"][0]
+    plugin = next(
+        item
+        for item in json.loads(result.stdout)["plugins"]
+        if item["id"] == "wheel-example"
+    )
     assert plugin["id"] == "wheel-example"
     assert plugin["capabilities"]["renderers"] == manifest["renderers"]
     assert not marker.exists()

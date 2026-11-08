@@ -1,18 +1,30 @@
 """Materialize validated syntax through explicitly trusted plugin handlers."""
 
-from artifactspec._contexts import PhraseBuilder, PropertyBuilder
-from artifactspec.models import Content, ContentNode
+from artifactspec.core._contexts import PhraseBuilder, PropertyBuilder
+from artifactspec.core.models import Content, ContentNode
+from artifactspec.core.syntax import CreateStatement, Document, SetStatement
+from artifactspec.core.validation import Diagnostic, ValidationResult, validate
 from artifactspec.plugins import Registry
-from artifactspec.syntax import CreateStatement, SetStatement
-from artifactspec.validation import Diagnostic, ValidationResult, validate
 
 
 class PipelineError(ValueError):
     """A specification or trusted plugin failed to produce semantic content."""
 
-    def __init__(self, message: str, diagnostics: tuple[Diagnostic, ...] = ()) -> None:
+    def __init__(
+        self,
+        message: str,
+        diagnostics: tuple[Diagnostic, ...] = (),
+        *,
+        code: str = "pipeline_failed",
+        limitations: tuple[str, ...] = (),
+    ) -> None:
         super().__init__(message)
         self.diagnostics = diagnostics
+        self.code = code
+        self.warnings = tuple(
+            item for item in diagnostics if item.severity == "warning"
+        )
+        self.limitations = limitations
 
 
 def build_content(
@@ -27,8 +39,20 @@ def build_content(
 def _materialize(result: ValidationResult, registry: Registry, source: str) -> Content:
     """Execute handlers only for the supplied successful validation result."""
     if not result.valid or result.document is None:
-        raise PipelineError("Specification validation failed", result.diagnostics)
+        raise PipelineError(
+            "Specification validation failed",
+            result.diagnostics,
+            code="validation_failed",
+        )
     document = result.document
+    nodes = _create_nodes(document, registry, source)
+    _apply_properties(result, registry, source, nodes)
+    return Content(tuple(nodes.values()))
+
+
+def _create_nodes(
+    document: Document, registry: Registry, source: str
+) -> dict[str, ContentNode]:
     declared = {
         item["name"]: item.get("object_type")
         for manifest in registry.manifests(output=document.output)
@@ -53,35 +77,46 @@ def _materialize(result: ValidationResult, registry: Registry, source: str) -> C
                 raise ValueError("created type does not match declared object_type")
         except Exception as exc:
             raise PipelineError(
-                f"Phrase {statement.phrase!r} failed at {source}:{statement.span.start.line}: {exc}"
+                f"Phrase {statement.phrase!r} failed at {source}:{statement.span.start.line}: {exc}",
+                code="phrase_failed",
             ) from exc
         nodes[statement.name] = ContentNode(
             statement.name, object_type, (), (statement.span,)
         )
+    return nodes
+
+
+def _apply_properties(
+    result: ValidationResult,
+    registry: Registry,
+    source: str,
+    nodes: dict[str, ContentNode],
+) -> None:
+    assert result.document is not None
     targets = {
         resolution.reference: resolution.target.name
         for resolution in result.resolutions
     }
-    for statement in document.statements:
+    for statement in result.document.statements:
         if not isinstance(statement, SetStatement):
             continue
         name = targets[statement.reference]
         node = nodes[name]
-        property_context = PropertyBuilder(node, statement.value.value, statement.span)
+        context = PropertyBuilder(node, statement.value.value, statement.span)
         try:
-            registry.handler("properties", statement.property, output=document.output)(
-                property_context
-            )
-            if property_context.changes == 0:
+            registry.handler(
+                "properties", statement.property, output=result.document.output
+            )(context)
+            if context.changes == 0:
                 raise ValueError("property handler must set at least one property")
         except Exception as exc:
             raise PipelineError(
-                f"Property {statement.property!r} failed at {source}:{statement.span.start.line}: {exc}"
+                f"Property {statement.property!r} failed at {source}:{statement.span.start.line}: {exc}",
+                code="property_failed",
             ) from exc
         nodes[name] = ContentNode(
             node.name,
             node.object_type,
-            tuple(property_context.properties.items()),
+            tuple(context.properties.items()),
             (*node.provenance, statement.span),
         )
-    return Content(tuple(nodes.values()))

@@ -2,8 +2,8 @@
 
 from typing import Protocol
 
-from artifactspec.models import Composition, Content
-from artifactspec.syntax import SourceSpan
+from artifactspec.core.models import Composition, Content
+from artifactspec.core.syntax import SourceSpan
 
 
 class PhraseContext(Protocol):

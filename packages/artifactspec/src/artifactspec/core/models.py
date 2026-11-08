@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from artifactspec.syntax import SourceSpan
+from artifactspec.core.syntax import SourceSpan
 
 
 @dataclass(frozen=True, slots=True)

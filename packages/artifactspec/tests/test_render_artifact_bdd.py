@@ -15,11 +15,14 @@ def state():
 
 
 def setup(state, output):
-    from artifactspec.basic import basic_plugin
     from artifactspec.plugins import Registry
+    from artifactspec.plugins.basic import basic_plugin
 
     registry = Registry()
     registry.register(basic_plugin())
+    from artifactspec_svg.plugin import plugin as svg_plugin
+
+    registry.register(svg_plugin)
     state["registry"] = registry
     state["spec"] = (
         f'Output {output}.\nCreate text named title.\nSet value of title to "Hello & world".\nCreate rectangle named box.'
@@ -38,7 +41,7 @@ def report_spec(state):
 
 @when("I render it using the selected representation and renderer")
 def render_image(state, tmp_path):
-    from artifactspec.rendering import render
+    from artifactspec.core.rendering import render
 
     state["path"] = tmp_path / "scene.svg"
     state["result"] = render(
@@ -71,8 +74,8 @@ def provenance(state):
 
 @when("I select the report representation")
 def select_report(state):
-    from artifactspec.pipeline import build_content
-    from artifactspec.rendering import compose
+    from artifactspec.core.pipeline import build_content
+    from artifactspec.core.rendering import compose
 
     content = build_content(state["spec"], state["registry"])
     state["composition"] = compose(
@@ -142,9 +145,9 @@ def check_cli(state):
 
 @given("a timeline of two dated events in declaration order")
 def timeline_spec(state):
-    from artifactspec.basic import basic_plugin
-    from artifactspec.pipeline import build_content
+    from artifactspec.core.pipeline import build_content
     from artifactspec.plugins import Registry
+    from artifactspec.plugins.basic import basic_plugin
 
     registry = Registry()
     registry.register(basic_plugin())
@@ -160,7 +163,7 @@ def timeline_spec(state):
 
 @when("I compose the same semantic timeline for image and report")
 def timeline_compositions(state):
-    from artifactspec.rendering import compose
+    from artifactspec.core.rendering import compose
 
     content = state["content"]
     state["forms"] = [
@@ -200,3 +203,75 @@ def no_playback(state):
         assert not hasattr(form.elements[0], "time")
     assert state["forms"][0].elements[0].y == 40
     assert state["forms"][0].elements[1].y == 110
+
+
+@given("a specification that produces a source-linked SVG image")
+def inspectable_spec(state, tmp_path):
+    state["spec_file"] = tmp_path / "scene.art"
+    state["spec_file"].write_text(
+        'Output image.\nCreate text named t.\nSet value of t to "Hello".',
+        encoding="utf-8",
+    )
+    state["destination"] = tmp_path / "scene.svg"
+
+
+@given("a specification with an unsupported SVG color and an existing artifact")
+def invalid_color_spec(state, tmp_path):
+    state["spec_file"] = tmp_path / "scene.art"
+    state["spec_file"].write_text(
+        'Output image.\nCreate text named t.\nSet color of t to "url(x)".',
+        encoding="utf-8",
+    )
+    state["destination"] = tmp_path / "scene.svg"
+    state["destination"].write_text("existing", encoding="utf-8")
+
+
+@when("I request a machine-readable render result")
+def run_json_render(state):
+    from typer.testing import CliRunner
+
+    from artifactspec.cli import app
+
+    state["result"] = CliRunner().invoke(
+        app,
+        [
+            "render",
+            str(state["spec_file"]),
+            "--builtin-basic",
+            "--representation",
+            "basic",
+            "--renderer",
+            "svg",
+            "--output",
+            str(state["destination"]),
+            "--format",
+            "json",
+        ],
+    )
+
+
+@then(
+    "the result reports composition provenance and limitations without asserting fidelity"
+)
+def check_inspectable_result(state):
+    import json
+
+    assert state["result"].exit_code == 0, state["result"].output
+    data = json.loads(state["result"].stdout)
+    assert data["status"] == "success"
+    assert data["provenance_status"] == "available"
+    assert {span["start"]["line"] for span in data["provenance"]} == {2, 3}
+    assert data["limitations"] and data["fallback"] is None
+    assert "fidelity" not in data
+
+
+@then("the result identifies the rendering error without replacing the artifact")
+def check_inspectable_error(state):
+    import json
+
+    assert state["result"].exit_code == 2
+    data = json.loads(state["result"].stdout)
+    assert data["schema_version"] == 1 and data["status"] == "error"
+    assert data["error"]["code"] == "renderer_failed"
+    assert "unsupported SVG color" in data["error"]["message"]
+    assert state["destination"].read_text(encoding="utf-8") == "existing"

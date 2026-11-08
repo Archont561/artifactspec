@@ -1,0 +1,1 @@
+"""ArtifactSpec core components."""

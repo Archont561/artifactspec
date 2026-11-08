@@ -9,6 +9,7 @@ Manim
 Typer
 Typst
 actionlint
+autodiscover(?:ed|ing|y)?
 add_typer
 airlocked
 alint

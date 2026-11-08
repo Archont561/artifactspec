@@ -8,18 +8,21 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from artifactspec.basic import basic_plugin
-from artifactspec.models import Content, ContentNode
-from artifactspec.pipeline import PipelineError, build_content
+from artifactspec.core.models import Content, ContentNode
+from artifactspec.core.pipeline import PipelineError, build_content
+from artifactspec.core.rendering import compose, render
 from artifactspec.plugins import Plugin, Registry
-from artifactspec.rendering import compose, render
+from artifactspec.plugins.basic import basic_plugin
 
-pytest_plugins = ["artifactspec.pytest_plugin"]
+pytest_plugins = ["artifactspec.testing.pytest_plugin"]
 
 
 def registry():
     result = Registry()
     result.register(basic_plugin())
+    from artifactspec_svg.plugin import plugin as svg_plugin
+
+    result.register(svg_plugin)
     return result
 
 
@@ -247,7 +250,7 @@ def test_atomic_write_failure_removes_temporary_file(tmp_path, monkeypatch):
 
 
 def test_unsupported_semantic_properties_are_not_silently_dropped():
-    from artifactspec.models import ContentNode
+    from artifactspec.core.models import ContentNode
 
     content = Content((ContentNode("x", "text", (("size", "30"),), ()),))
     with pytest.raises(PipelineError, match="cannot express properties"):

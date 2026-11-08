@@ -6,15 +6,15 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Literal
 
-from artifactspec.parser import ParseError, parse
-from artifactspec.plugins import CapabilityCatalog
-from artifactspec.syntax import (
+from artifactspec.core.parser import ParseError, parse
+from artifactspec.core.syntax import (
     CreateStatement,
     Document,
     Reference,
     SetStatement,
     SourceSpan,
 )
+from artifactspec.plugins import CapabilityCatalog
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +105,33 @@ def _check_type(
     return None
 
 
+def _declaration_diagnostics(
+    statement: CreateStatement,
+    phrase_types: dict[str, str | None],
+    definitions: dict[str, list[CreateStatement]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if phrase_types[statement.phrase] is None:
+        diagnostics.append(
+            Diagnostic(
+                "unverified_type",
+                "warning",
+                f"Object {statement.name!r} has no declared type; plugin type metadata is missing.",
+                statement.span,
+            )
+        )
+    if len(definitions[statement.name]) > 1:
+        diagnostics.append(
+            Diagnostic(
+                "duplicate_name",
+                "error",
+                f"Object {statement.name!r} is declared more than once; use unique names.",
+                statement.span,
+            )
+        )
+    return diagnostics
+
+
 def _semantic_checks(
     document: Document, registry: CapabilityCatalog
 ) -> ValidationResult:
@@ -125,24 +152,9 @@ def _semantic_checks(
     latest: CreateStatement | None = None
     for statement in document.statements:
         if isinstance(statement, CreateStatement):
-            if phrase_types[statement.phrase] is None:
-                diagnostics.append(
-                    Diagnostic(
-                        "unverified_type",
-                        "warning",
-                        f"Object {statement.name!r} has no declared type; plugin type metadata is missing.",
-                        statement.span,
-                    )
-                )
-            if len(definitions[statement.name]) > 1:
-                diagnostics.append(
-                    Diagnostic(
-                        "duplicate_name",
-                        "error",
-                        f"Object {statement.name!r} is declared more than once; use unique names.",
-                        statement.span,
-                    )
-                )
+            diagnostics.extend(
+                _declaration_diagnostics(statement, phrase_types, definitions)
+            )
             latest = statement
             continue
         target, error = _resolve(statement.reference, latest, definitions)

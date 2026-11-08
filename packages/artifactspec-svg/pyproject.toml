@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.27,<1.30"]
+build-backend = "hatchling.build"
+
+[project]
+name = "artifactspec-svg"
+version = "0.1.0"
+description = "Static SVG renderer plugin for ArtifactSpec."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["artifactspec>=0.1.0"]
+
+[project.entry-points."artifactspec.plugins"]
+svg = "artifactspec_svg.plugin:plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/artifactspec_svg"]

@@ -8,9 +8,8 @@ from typing import cast
 from lark import Lark, Token, Tree
 from lark.exceptions import UnexpectedInput
 
-from artifactspec._lines import source_lines
-from artifactspec.plugins import CapabilityCatalog
-from artifactspec.syntax import (
+from artifactspec.core._lines import source_lines
+from artifactspec.core.syntax import (
     CreateStatement,
     Document,
     Position,
@@ -20,6 +19,7 @@ from artifactspec.syntax import (
     Statement,
     StringValue,
 )
+from artifactspec.plugins import CapabilityCatalog
 
 # No whitespace is ignored: separators and capability word spacing are literal.
 # Earley allows grammar words such as "named" and "of" inside capability names.

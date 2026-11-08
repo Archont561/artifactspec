@@ -4,7 +4,7 @@ This page defines the initial implemented syntax and the intended semantic
 contracts. Parsing is not validation or rendering: it does not resolve references,
 execute plugin handlers, infer facts, or guarantee that a renderer exists. The
 validation CLI and language server share semantic reference and type checks;
-a minimal trusted-plugin static SVG rendering pipeline is also available.
+a minimal static SVG rendering pipeline is available with the optional SVG plugin.
 
 ## Implemented syntax
 
@@ -24,7 +24,7 @@ Set color of it to "yellow".
 Set label of sun to "Bright sun".
 ```
 
-`image` must be an output declared by an explicitly registered plugin. Output
+`image` must be an output declared by an available plugin manifest or registry. Output
 names use the same ASCII identifier syntax as object names. `circle`
 is an exact registered phrase name, `color` and `label` are exact registered
 property names, and each must be compatible with that output. This uses the
@@ -66,7 +66,7 @@ The parser uses Lark to parse each nonblank line according to this grammar, then
 checks capabilities against the supplied registry and decodes JSON strings. Lark
 is a runtime dependency, not a plugin loader or semantic validator.
 
-`artifactspec.parser.parse(text, registry, source="...")` returns an immutable
+`artifactspec.core.parser.parse(text, registry, source="...")` returns an immutable
 `Document` containing an output and typed `CreateStatement` and `SetStatement`
 nodes. Lines and columns are one-based Unicode code-point positions; span ends
 are exclusive. Spans carry the caller-provided source identifier. A parse failure
@@ -79,7 +79,7 @@ decoded JSON value and its literal source span.
 For example, with a previously approved and registered plugin:
 
 ```python
-from artifactspec.parser import parse
+from artifactspec.core.parser import parse
 from artifactspec.plugins import Plugin, Registry
 
 plugin = Plugin("shapes", "1", outputs=("image",))
@@ -109,7 +109,7 @@ by this contract; resolution occurs only after the complete document is availabl
 change it. It starts unset for each new document, and a use before any creation
 must produce a source-linked diagnostic, not guess. A new document resets `it`;
 the only output header must start the document, so it is not a nested scope.
-The parser preserves references; `artifactspec.validation.validate` checks these
+The parser preserves references; `artifactspec.core.validation.validate` checks these
 rules and returns a `ValidationResult` containing diagnostics and resolved
 references. Duplicate names, unresolved and ambiguous references are errors.
 Version 2 plugin metadata permits exact object-type checking for properties;
@@ -132,7 +132,7 @@ a **renderer** consumes an approved composition and produces artifacts plus
 warnings/provenance. A plugin can contribute phrases, properties,
 representations and renderers through the registry. Phase-specific context
 protocols and a small static implementation are available in
-`artifactspec.contexts`, `artifactspec.pipeline`, and `artifactspec.rendering`;
+`artifactspec.core.contexts`, `artifactspec.core.pipeline`, and `artifactspec.core.rendering`;
 the parser itself does not run them. The following conceptual types illustrate
 their relationships rather than a finalized wire format:
 

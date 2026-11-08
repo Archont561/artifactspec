@@ -29,23 +29,28 @@ def fake_builds(monkeypatch, *, with_license):
                 archive.writestr(f"{package}-0.1.0.dist-info/licenses/LICENSE", "MIT")
         (out / f"{package}-0.1.0.tar.gz").touch()
 
+    def check_json(*args, **expectations):
+        calls.append(args)
+        assert expectations["status"] in {"success", "error"}
+
     monkeypatch.setattr(check_packages, "run", run)
+    monkeypatch.setattr(check_packages, "check_json", check_json)
     return calls
 
 
-def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
+def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
     calls = fake_builds(monkeypatch, with_license=True)
     check_packages.main()
-    assert sum("build" in call for call in calls) == 2
+    assert sum("build" in call for call in calls) == 3
     assert any("twine" in call and "check" in call for call in calls)
     assert any("--no-deps" in call for call in calls)
     assert any("-I" in call and "-c" in call for call in calls)
     assert any(
         any(
-            "from artifactspec.parser import parse" in arg
+            "from artifactspec.core.parser import parse" in arg
             and "Set label of sun" in arg
-            and "from artifactspec.validation import validate" in arg
-            and "from artifactspec.lsp import create_server" in arg
+            and "from artifactspec.core.validation import validate" in arg
+            and "from artifactspec.editor.lsp import create_server" in arg
             for arg in call
         )
         for call in calls
@@ -69,7 +74,8 @@ def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
             and "--help" in call
             for call in calls
         )
-    assert sum("render" in call and "--builtin-basic" in call for call in calls) == 2
+    assert sum("render" in call and "--builtin-basic" in call for call in calls) == 6
+    assert sum("render" in call and "--format" in call for call in calls) == 4
 
 
 def test_check_packages_rejects_a_missing_wheel_license(monkeypatch):

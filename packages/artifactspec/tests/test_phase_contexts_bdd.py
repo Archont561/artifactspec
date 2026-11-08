@@ -15,7 +15,7 @@ def state():
 
 @given("a typed text plugin using public phase contexts")
 def text_plugin(state):
-    from artifactspec.contexts import PhraseContext, PropertyContext
+    from artifactspec.core.contexts import PhraseContext, PropertyContext
     from artifactspec.plugins import Plugin, Registry
 
     plugin = Plugin("example", "1", outputs=("image", "report"), schema_version=2)
@@ -35,7 +35,7 @@ def text_plugin(state):
 
 @when("a valid specification is converted into semantic content")
 def build_content(state):
-    from artifactspec.pipeline import build_content
+    from artifactspec.core.pipeline import build_content
 
     state["content"] = build_content(
         'Output image.\nCreate text named title.\nSet value of title to "Hello".',

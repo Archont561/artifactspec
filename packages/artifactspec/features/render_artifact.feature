@@ -20,3 +20,13 @@ Feature: Render validated semantic content
     When I compose the same semantic timeline for image and report
     Then both forms preserve the event dates and labels in declaration order
     And the event dates are not animation playback timing
+
+  Scenario: Inspect provenance and limitations in a machine-readable render result
+    Given a specification that produces a source-linked SVG image
+    When I request a machine-readable render result
+    Then the result reports composition provenance and limitations without asserting fidelity
+
+  Scenario: Inspect a machine-readable rendering failure
+    Given a specification with an unsupported SVG color and an existing artifact
+    When I request a machine-readable render result
+    Then the result identifies the rendering error without replacing the artifact

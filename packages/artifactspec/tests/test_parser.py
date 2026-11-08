@@ -2,9 +2,9 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from artifactspec.parser import ParseError, parse
+from artifactspec.core.parser import ParseError, parse
+from artifactspec.core.syntax import CreateStatement, Position, SetStatement, SourceSpan
 from artifactspec.plugins import Plugin, RegistrationError, Registry
-from artifactspec.syntax import CreateStatement, Position, SetStatement, SourceSpan
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ def test_literal_and_reference_spans_with_unicode_and_tabs(registry):
 def test_ambiguous_lark_parse_is_rejected(registry, monkeypatch):
     from lark import Tree
 
-    from artifactspec import parser
+    from artifactspec.core import parser
 
     monkeypatch.setattr(
         parser._PARSER, "parse", lambda *args, **kwargs: Tree("_ambig", [])

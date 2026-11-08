@@ -17,7 +17,7 @@ def serve(
     ] = False,
 ) -> None:
     """Run the language server over standard input and output."""
-    from artifactspec.lsp import start
+    from artifactspec.editor.lsp import start
 
     try:
         start(builtin_basic=builtin_basic)

@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 17:36'
+updated_date: '2026-11-08 18:26'
 tags:
   - specification
   - architecture
@@ -66,7 +66,7 @@ The core should expose phase-specific context **protocols** to plugin functions 
 
 Provide an `artifactspec.testing` layer with fake contexts and helpers, and a pytest plugin with fixtures backed by those helpers. Test individual plugin behavior using fakes as well as end-to-end registration, parsing, validation, and rendering where applicable.
 
-Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Installed discovery reads static manifests without importing plugin code; explicit trusted loading checks the runtime declaration against the manifest. Approval and broader dependency policy remain future work. Rust through PyO3 is an option only for measured performance bottlenecks.
+Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Installed discovery reads static manifests without importing plugin code. Rendering automatically imports installed plugins by default, so installation authorizes runtime execution; users can disable autoload and select plugins explicitly. Runtime loading compares the declaration against its manifest. Broader acquisition and dependency policy remain future work. Rust through PyO3 is an option only for measured performance bottlenecks.
 
 ## 6. Validation, diagnostics, and fidelity
 
@@ -74,7 +74,7 @@ A shared validation model and LSP are desired across output formats. Diagnostics
 
 Render results should make it possible to inspect the selected representation and renderer, source-to-output provenance where feasible, warnings, approximations, and unsupported or degraded features. Behavior for unsupported requirements—error, explicit fallback, or user-approved degradation—must be designed and documented per capability.
 
-Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. The validation CLI and LSP share reference and declared-type checks. The first static rendering slice exposes source provenance and limitations but does not verify visual fidelity or factual content.
+Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. The validation CLI and LSP share reference and declared-type checks. The first static rendering slice exposes composition-level source links and their availability, warnings, limitations, and opt-in machine-readable failures. It does not verify artifact-level provenance, visual fidelity or factual content.
 
 ## 7. Agent skills
 
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit selection and atomic rendering through trusted plugins. The opt-in basic plugin renders text, rectangles and dated calendar events to SVG; it can compose image and report forms but does not render reports. Calendar events retain domain dates and declaration order without playback scheduling. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation playback, grouped or approximate timelines, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings.
+The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit representation and backend selection with atomic rendering. The opt-in basic plugin composes text, rectangles and dated calendar events for image and report forms. The separate optional artifactspec-svg plugin renders image compositions to SVG; reports have no renderer. Calendar events retain domain dates and declaration order without playback scheduling. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation playback, grouped or approximate timelines, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings.
 
 ## 10. Initial product acceptance goals
 

@@ -24,6 +24,6 @@ def basic_manifest() -> dict[str, Any]:
                 {"name": "color", "outputs": [], "target_types": ["text", "rectangle"]},
             ],
             "representations": [{"name": "basic", "outputs": ["image", "report"]}],
-            "renderers": [{"name": "svg", "outputs": ["image"]}],
+            "renderers": [],
         }
     )
