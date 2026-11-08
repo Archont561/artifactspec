@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.27,<1.30"]
+build-backend = "hatchling.build"
+
+[project]
+name = "artifactspec"
+version = "0.1.0"
+description = "A framework for describing and producing visual artifacts."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-bdd>=8,<10", "ruff>=0.11,<1", "pytest-cov>=6,<8"]
+
+[project.urls]
+Repository = "https://github.com/Archont561/artifactspec"
+Issues = "https://github.com/Archont561/artifactspec/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/artifactspec"]
