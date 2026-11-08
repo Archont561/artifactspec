@@ -58,6 +58,43 @@ plugin IDs and duplicate `(kind, name)` contributions are errors, regardless
 of version or output; errors name the conflict rather than selecting a winner.
 Malformed, missing, or unsupported manifests fail discovery explicitly.
 
+## Semantic type metadata (version 2)
+
+Version 2 adds static type declarations to phrase and property contributions.
+A phrase has an `object_type` string naming the type of the object it creates;
+a property has a nonempty `target_types` array naming the object types it can
+be applied to. The other top-level fields and contribution output rules are
+unchanged. For example:
+
+```json
+{
+  "schema_version": 2,
+  "id": "shapes",
+  "version": "1.0",
+  "outputs": ["image"],
+  "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
+  "properties": [{"name": "color", "outputs": [], "target_types": ["circle"]}],
+  "representations": [],
+  "renderers": []
+}
+```
+
+Type names are exact, case-sensitive nonempty strings; there is no subtype or
+inheritance model. They are self-reported metadata, not proof of correctness.
+Only JSON string values are supported by the current language. Version 1 remains
+supported: validation issues a warning when an object or property type cannot be
+checked. Typed runtime declarations opt in explicitly:
+
+```python
+plugin = Plugin("shapes", "1.0", outputs=("image",), schema_version=2)
+plugin.phrase("circle", object_type="circle")(lambda context: None)
+plugin.property("color", target_types=("circle",))(lambda context: None)
+```
+
+Metadata must still match exactly when explicitly loading a trusted plugin.
+`ManifestCatalog` accepts validated static manifests for parsing or validation
+without importing plugin modules or invoking handlers.
+
 ## Runtime registration
 
 ```python

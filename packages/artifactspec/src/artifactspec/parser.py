@@ -8,7 +8,7 @@ from typing import cast
 from lark import Lark, Token, Tree
 from lark.exceptions import UnexpectedInput
 
-from artifactspec.plugins import Registry
+from artifactspec.plugins import CapabilityCatalog
 from artifactspec.syntax import (
     CreateStatement,
     Document,
@@ -148,7 +148,7 @@ def _create_statement(
 
 
 def _available_capabilities(
-    registry: Registry, output: str
+    registry: CapabilityCatalog, output: str
 ) -> tuple[set[str], set[str]]:
     """Collect phrase and property names compatible with an output."""
     manifests = registry.manifests(output=output)
@@ -159,7 +159,9 @@ def _available_capabilities(
     return phrases, properties
 
 
-def parse(text: str, registry: Registry, *, source: str = "<memory>") -> Document:
+def parse(
+    text: str, registry: CapabilityCatalog, *, source: str = "<memory>"
+) -> Document:
     """Parse one document; no partial result is returned on an error."""
     manifests = registry.manifests()
     outputs = {output for manifest in manifests for output in manifest["outputs"]}

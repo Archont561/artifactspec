@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 14:43'
+updated_date: '2026-11-08 15:39'
 tags:
   - specification
   - architecture
@@ -46,7 +46,7 @@ Representation choice, backend limitations, and fallback behavior should be expl
 
 The language should be concise, controlled natural language: primarily declarative sentences with predictable, registered patterns. Plugins may contribute nouns, verbs, phrases, and output-specific commands. Avoid making users write verbose programming-like calls, `custom(...)` expressions, or deeply nested object structures as the primary authoring model.
 
-Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. The first subset specifies `it` as the most recently created object in the same document; resolution and validation remain future work. See `docs/language.md`.
+Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. The first subset resolves `it` as the most recently created object in the same document. Named references and declared object and property types are checked; missing type metadata produces a warning. See `docs/language.md`.
 
 The authoring model may resemble Gherkin in readability, but is not required to be Gherkin syntax or compatible with Gherkin tooling. The initial `Output`, `Create`, and `Set` grammar is implemented as a source-linked parser; other proposed syntax is illustrative.
 
@@ -74,7 +74,7 @@ A shared validation model and LSP are desired across output formats. Diagnostics
 
 Render results should make it possible to inspect the selected representation and renderer, source-to-output provenance where feasible, warnings, approximations, and unsupported or degraded features. Behavior for unsupported requirements—error, explicit fallback, or user-approved degradation—must be designed and documented per capability.
 
-Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. No general validator, LSP, or explainable-rendering subsystem exists yet.
+Visual inspection, output decoding or parsing, and factual review complement—not replace—syntax and semantic validation. The validation CLI and LSP share reference and declared-type checks; semantic content validation and explainable rendering are not yet implemented.
 
 ## 7. Agent skills
 
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, and an output-aware typed parser; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Semantic reference resolution, phase context protocols, validation, renderer, narration, timing synchronization, LSP, and skill installer are not implemented. The expanded test matrix requires verification on GitHub.
+The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, an output-aware parser, reference and declared-type validation, and CLI and LSP diagnostics; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Phase context protocols, general semantic content validation, rendering, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings. The PyGLS dependency requires a relock bot update before locked CI can verify the milestone.
 
 ## 10. Initial product acceptance goals
 

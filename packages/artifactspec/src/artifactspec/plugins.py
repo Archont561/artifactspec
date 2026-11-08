@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 KINDS = ("phrases", "properties", "representations", "renderers")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -43,7 +43,7 @@ def _declared_outputs(values: Iterable[str]) -> list[str]:
 
 
 def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str, Any]:
-    """Validate and normalize a version-1 static or runtime manifest."""
+    """Validate and normalize a static or runtime manifest."""
     if not isinstance(data, dict) or set(data) != {
         "schema_version",
         "id",
@@ -54,8 +54,9 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
         raise RegistrationError(
             "manifest must contain exactly schema_version, id, version, outputs and all capability lists"
         )
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
-        raise RegistrationError("unsupported manifest schema_version; expected 1")
+    if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2):
+        raise RegistrationError("unsupported manifest schema_version; expected 1 or 2")
+    schema_version = data["schema_version"]
     plugin_id = _name(data["id"], "plugin id")
     if not re.fullmatch(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*", plugin_id):
         raise RegistrationError(f"invalid plugin id {plugin_id!r}")
@@ -64,7 +65,7 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
             f"manifest id {plugin_id!r} does not match entry point {expected_id!r}"
         )
     result: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": schema_version,
         "id": plugin_id,
         "version": _name(data["version"], "version"),
         "outputs": _outputs(data["outputs"], "outputs"),
@@ -76,9 +77,19 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
         normalized = []
         seen = set()
         for item in entries:
-            if not isinstance(item, dict) or set(item) != {"name", "outputs"}:
+            fields = {"name", "outputs"}
+            if schema_version == 2 and kind == "phrases":
+                fields.add("object_type")
+            if schema_version == 2 and kind == "properties":
+                fields.add("target_types")
+            if not isinstance(item, dict) or set(item) != fields:
+                required = (
+                    "name and outputs"
+                    if schema_version == 1
+                    else ", ".join(sorted(fields))
+                )
                 raise RegistrationError(
-                    f"each {kind} contribution must have name and outputs"
+                    f"each {kind} contribution must have {required}"
                 )
             name = _name(item["name"], f"{kind} name")
             if name in seen:
@@ -91,7 +102,15 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
                 raise RegistrationError(
                     f"{kind} contribution {name!r} declares unsupported outputs"
                 )
-            normalized.append({"name": name, "outputs": outputs})
+            contribution: dict[str, Any] = {"name": name, "outputs": outputs}
+            if schema_version == 2 and kind == "phrases":
+                contribution["object_type"] = _name(item["object_type"], "object type")
+            if schema_version == 2 and kind == "properties":
+                target_types = _outputs(item["target_types"], "target types")
+                if not target_types:
+                    raise RegistrationError("target types must not be empty")
+                contribution["target_types"] = target_types
+            normalized.append(contribution)
         result[kind] = sorted(normalized, key=lambda item: item["name"])
     return result
 
@@ -139,14 +158,36 @@ def filter_manifests(
     return result
 
 
+class CapabilityCatalog(Protocol):
+    """Read-only capability metadata used by parsing and validation."""
+
+    def manifests(self, *, output: str | None = None) -> list[dict[str, Any]]: ...
+
+
+class ManifestCatalog:
+    """Validated static metadata without importing or invoking plugin code."""
+
+    def __init__(self, manifests: Iterable[dict[str, Any]]) -> None:
+        self._manifests = [validate_manifest(item) for item in manifests]
+        check_conflicts(self._manifests)
+
+    def manifests(self, *, output: str | None = None) -> list[dict[str, Any]]:
+        return filter_manifests(self._manifests, output)
+
+
 class Plugin:
     """A declaration of capabilities and their Python handlers."""
 
     def __init__(
-        self, plugin_id: str, version: str, *, outputs: Iterable[str] = ()
+        self,
+        plugin_id: str,
+        version: str,
+        *,
+        outputs: Iterable[str] = (),
+        schema_version: int = 1,
     ) -> None:
         self._data: dict[str, Any] = {
-            "schema_version": 1,
+            "schema_version": schema_version,
             "id": plugin_id,
             "version": version,
             "outputs": _declared_outputs(outputs),
@@ -157,7 +198,7 @@ class Plugin:
         self._frozen = False
 
     def _contribute(
-        self, kind: str, name: str, outputs: Iterable[str]
+        self, kind: str, name: str, outputs: Iterable[str], **metadata: Any
     ) -> Callable[[F], F]:
         def decorate(func: F) -> F:
             if self._frozen:
@@ -166,7 +207,7 @@ class Plugin:
                 raise RegistrationError("plugin contribution must be callable")
             candidate = self.manifest()
             candidate[kind].append(
-                {"name": name, "outputs": _declared_outputs(outputs)}
+                {"name": name, "outputs": _declared_outputs(outputs), **metadata}
             )
             self._data = validate_manifest(candidate)
             self._handlers[(kind, name)] = func
@@ -174,11 +215,25 @@ class Plugin:
 
         return decorate
 
-    def phrase(self, name: str, *, outputs: Iterable[str] = ()) -> Callable[[F], F]:
-        return self._contribute("phrases", name, outputs)
+    def phrase(
+        self, name: str, *, outputs: Iterable[str] = (), object_type: str | None = None
+    ) -> Callable[[F], F]:
+        metadata = {} if object_type is None else {"object_type": object_type}
+        return self._contribute("phrases", name, outputs, **metadata)
 
-    def property(self, name: str, *, outputs: Iterable[str] = ()) -> Callable[[F], F]:
-        return self._contribute("properties", name, outputs)
+    def property(
+        self,
+        name: str,
+        *,
+        outputs: Iterable[str] = (),
+        target_types: Iterable[str] | None = None,
+    ) -> Callable[[F], F]:
+        metadata = (
+            {}
+            if target_types is None
+            else {"target_types": _declared_outputs(target_types)}
+        )
+        return self._contribute("properties", name, outputs, **metadata)
 
     def representation(
         self, name: str, *, outputs: Iterable[str] = ()

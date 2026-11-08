@@ -3,12 +3,15 @@
 The core package provides decorator-based plugin registration and static
 capability discovery. Discovery does not import installed plugin code; plugins
 are trusted executable Python and must be approved before loading. The core also
-provides an output-aware parser at `artifactspec.parser`; semantic validation,
-phase contexts, and rendering are not implemented yet.
+provides an output-aware parser and reference and declared-type validation,
+with a validation CLI and language server. Plugin phase contexts and rendering
+are not implemented yet.
 
 ```sh
 artifactspec capabilities
 artifactspec capabilities --details --output svg
+artifactspec validate scene.art --format json
+artifactspec lsp
 ```
 
 The package root exports `VERSION`, read from installed distribution metadata.
