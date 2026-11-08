@@ -15,6 +15,7 @@ shellcheck = ">=0.11,<1"
 [pypi-dependencies]
 # The build backend is locked so local projects can be installed without network.
 hatchling = ">=1.27,<1.30"
+typer = ">=0.24,<0.29"
 pytest = ">=8,<10"
 pytest-bdd = ">=8,<10"
 pytest-cov = ">=6,<8"

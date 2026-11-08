@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 03:05'
+updated_date: '2026-11-08 14:06'
 tags:
   - specification
   - architecture
@@ -11,7 +11,7 @@ tags:
 ---
 ## Status and purpose
 
-**Design specification, not an implementation claim.** This document captures the agreed direction and requirements for ArtifactSpec. Interface shapes, file grammar, release scope, and several semantics remain open. “Must” describes the intended product contract, not functionality that necessarily exists today. Decisions are recorded as `decision-1` through `decision-13` in `backlog/decisions/`.
+**Design specification, not an implementation claim.** This document captures the agreed direction and requirements for ArtifactSpec. Interface shapes, file grammar, release scope, and several semantics remain open. “Must” describes the intended product contract, not functionality that necessarily exists today. Historical decisions are recorded in `backlog/decisions/`; the first plugin milestone supersedes the core-only scaffold boundary in decision-13.
 
 ## 1. Product vision
 
@@ -25,7 +25,7 @@ An agent should be able to:
 4. Preview or render the requested artifact using an appropriate backend.
 5. Inspect results, including diagnostics, render provenance, fallbacks, and fidelity limitations; report outcomes and unresolved problems to the user.
 
-Discovery and validation should be economical with tokens: offer concise summaries and progressive detail instead of requiring an agent to load all documentation at once. Precise commands and output schemas are not yet specified.
+Discovery and validation should be economical with tokens: offer concise summaries and progressive detail instead of requiring an agent to load all documentation at once. The first capability-discovery CLI and its versioned JSON schema are documented in `docs/plugins.md`.
 
 ## 2. Scope and artifact model
 
@@ -60,13 +60,13 @@ A target workflow includes narration with ElevenLabs and synchronization between
 
 ## 5. Plugin architecture
 
-Plugins should be Python-first, explicit, and discoverable. The preferred authoring style is a `Plugin(...)` instance with decorators for contributed phrases, properties, representations, renderers, and related behavior. Plugins should be able to declare which outputs and capabilities they support; exact registration and compatibility rules remain open.
+Plugins should be Python-first, explicit, and discoverable. The preferred authoring style is a `Plugin(...)` instance with decorators for contributed phrases, properties, representations, renderers, and related behavior. Plugins declare outputs and capabilities; the initial registration, conflict, and output-compatibility rules are documented in `docs/plugins.md`.
 
 The core should expose phase-specific context **protocols** to plugin functions and inject its own concrete implementations. Plugins should not need to import private core objects such as internal property-assignment classes. A context records or requests operations appropriate to its phase rather than exposing renderer internals by default.
 
 Provide an `artifactspec.testing` layer with fake contexts and helpers, and a pytest plugin with fixtures backed by those helpers. Test individual plugin behavior using fakes as well as end-to-end registration, parsing, validation, and rendering where applicable.
 
-Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Metadata discovery without executing untrusted code, dependency policy, versions, and trust boundaries require design. Rust through PyO3 is an option only for measured performance bottlenecks.
+Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Installed discovery reads static manifests without importing plugin code; explicit trusted loading checks the runtime declaration against the manifest. Approval and broader dependency policy remain future work. Rust through PyO3 is an option only for measured performance bottlenecks.
 
 ## 6. Validation, diagnostics, and fidelity
 
@@ -84,16 +84,16 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 8. Packaging, repository, and quality
 
-- The intended `artifactspec` product combines framework and CLI; a renderer such as `artifactspec-manim` may eventually be separate. Both current packages are version-only scaffolds (decision-13).
-- Each package initializer explicitly exports only `VERSION`, sourced from installed distribution metadata generated from `pyproject.toml`. Package-local BDD tests check the fresh namespace, pyproject, installed metadata, and minimal source layout.
+- The intended `artifactspec` product combines framework and CLI; a renderer such as `artifactspec-manim` may eventually be separate. The core now provides plugin registration and static capability discovery; the Manim distribution remains a version-only placeholder (the initial scaffold boundary is described in decision-13).
+- Each package initializer explicitly exports only `VERSION`, sourced from installed distribution metadata generated from `pyproject.toml`. Package-local BDD tests check the fresh namespace, pyproject and installed metadata; the Manim package also checks its minimal source layout.
 - Product tests and Gherkin features belong to their owning package. Repository scripts live in root `scripts/`, with their tests and script-specific features in `scripts/tests/` (decision-12 supersedes the root-test prohibition in decision-7 for scripts). Keep `examples/` empty until the API is stable.
 - Maintain `pixi.toml` and `pixi-sandbox.toml`. The sandbox file is an initial policy, not evidence of operational sandbox automation.
 - CI uses one change-detection script: docs/backlog-only changes get lightweight documentation checks, scripts-only changes run the scripts suite, mixed docs/scripts changes run both, and other or indeterminate changes run full checks. Commit messages are always linted. Full checks generate coverage and upload to Codecov where credentials are available; fork PR uploads are skipped. See `docs/ci.md` for operational details.
-- Coverage includes the current version-only package code. A passing test or coverage percentage is not a guarantee of visual correctness.
+- Coverage includes the current package code. A passing test or coverage percentage is not a guarantee of visual correctness.
 
 ## 9. Current implementation boundary
 
-The repository currently provides two version-only package scaffolds, package-local BDD tests, repository scripts and their tests, development tooling, and CI configuration. The former CLI and Manim text-video prototype were removed at the user’s request. The language, CLI, renderer, general plugin API, narration, timing synchronization, LSP, and skill installer are not implemented. Remote CI and Codecov behavior still require verification on GitHub.
+The core implements a decorator-based plugin registry, static installed plugin manifests, and JSON capability discovery; see `docs/plugins.md`. The Manim package remains a version-only scaffold. The language, phase context protocols, validation, renderer, narration, timing synchronization, LSP, and skill installer are not implemented. The expanded test matrix requires verification on GitHub.
 
 ## 10. Initial product acceptance goals
 
@@ -110,9 +110,9 @@ These goals describe future capability, not current completion:
 
 - Grammar, phrase registration and conflict resolution; precise `it` scope; source file boundaries and imports.
 - Typed IR, cross-output content contracts, composition rules, and representation selection.
-- Plugin metadata, compatibility and approval; safe discovery before executable code runs.
+- Core-version compatibility negotiation, plugin acquisition and approval policy.
 - LSP protocol integration, diagnostics format, incremental validation, and provenance granularity.
 - Animation interpolation, time units, concurrency, narration alignment, and audio provider abstraction.
-- CLI command names and machine-readable discovery/output schemas; the workflow for obtaining plugins.
+- Further CLI commands, schema evolution, and the workflow for obtaining plugins.
 - Skill lockfile interoperability, symlinks versus copies, and lifecycle safety.
 - Backend-specific editable output, fallback policies, visual verification, and implementation milestones.

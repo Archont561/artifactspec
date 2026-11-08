@@ -62,7 +62,7 @@ CI also imports Manim and checks FFmpeg in its optional Pixi environment. The
 Manim-named distribution is a version-only placeholder; no renderer tests
 currently exist. The
 package metadata has no upper Python bound, so later Python versions are not
-currently covered by this matrix. The matrix awaits verification on GitHub.
+currently covered by this matrix. The expanded plugin test suite requires verification on GitHub.
 
 `pixi run audit` checks known Python package vulnerabilities in the default
 Pixi environment using pip-audit and skips editable distributions. It is also

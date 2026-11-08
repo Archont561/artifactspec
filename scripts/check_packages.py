@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(*args: str) -> None:
-    subprocess.run(args, cwd=ROOT, check=True)
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    subprocess.run(args, cwd=ROOT, env=env, check=True)
 
 
 def main() -> None:
@@ -47,8 +49,13 @@ def main() -> None:
         run(sys.executable, "-m", "venv", str(venv))
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         run(str(python), "-m", "pip", "install", str(core))
-        # Both wheels are currently minimal, independent scaffolds.
+        # The optional Manim placeholder remains an independent distribution.
         run(str(python), "-m", "pip", "install", "--no-deps", str(manim))
+        run(str(python), "-I", "-m", "artifactspec", "capabilities", "--details")
+        console = venv / (
+            "Scripts/artifactspec.exe" if os.name == "nt" else "bin/artifactspec"
+        )
+        run(str(console), "capabilities", "--details")
         run(
             str(python),
             "-I",
