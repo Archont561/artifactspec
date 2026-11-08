@@ -70,9 +70,12 @@ def main() -> None:
             "from artifactspec.plugins import Plugin, Registry; "
             "plugin = Plugin('example', '1', outputs=('image',)); "
             "plugin.phrase('circle')(lambda context: None); "
+            "plugin.property('label')(lambda context: None); "
             "registry = Registry(); registry.register(plugin); "
-            "assert parse('Output image.\\nCreate circle named sun.', registry)"
-            ".statements[0].name == 'sun'",
+            "document = parse('Output image.\\nCreate circle named sun.\\n"
+            'Set label of sun to \\"hello\\".\', registry); '
+            "assert document.statements[0].name == 'sun'; "
+            "assert document.statements[1].value.value == 'hello'",
         )
 
 
