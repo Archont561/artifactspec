@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 21:20'
+updated_date: '2026-11-08 22:20'
 tags:
   - specification
   - architecture
@@ -60,9 +60,17 @@ A target workflow includes narration with ElevenLabs and synchronization between
 
 ## 5. Plugin architecture
 
-Plugins should be Python-first, explicit, and discoverable. The preferred authoring style is a `Plugin(...)` instance with decorators for contributed phrases, properties, representations, renderers, and related behavior. Plugins declare outputs and capabilities; the initial registration, conflict, and output-compatibility rules are documented in `docs/plugins.md`.
+Plugins should be Python-first, explicit, and discoverable. The current implementation uses a `Plugin(...)` instance with decorators for contributed phrases, properties, representations, renderers, and related behavior. Plugins declare outputs and capabilities; the current registration, conflict, and output-compatibility rules are documented in `docs/plugins.md`.
 
-The core should expose phase-specific context **protocols** to plugin functions and inject its own concrete implementations. Plugins should not need to import private core objects such as internal property-assignment classes. A context records or requests operations appropriate to its phase rather than exposing renderer internals by default.
+### Proposed class-based authoring direction
+
+The user wants to reduce duplicated declarations and handler registration. The proposed direction is to compose plugin-owned statement and capability objects, with typed reusable property components and overridable methods, without separate name-based decorators. Plugins should define complete statement and output syntax; core should discover the selected plugins, register their contributions, validate syntax, and dispatch the appropriate handlers. Core should not impose creation and property assignment as the only statement categories.
+
+Statement syntax should remain declarative and composable. Structured syntax components are a candidate because a Python f-string produces a plain string and does not retain the original property object. Exact composition, default behavior, property binding, semantic effects, and migration rules need a reviewed contract before implementation. Handlers should access an invocation-specific context as an object property; context binding must prevent state leakage across concurrent or nested calls. Representation and renderer contributions should follow the same object-oriented direction.
+
+The current trust boundary remains: discovery imports selected installed plugin objects, while parsing and validation use declarations without invoking handlers. Preserve source-linked diagnostics, reference and type checks, explicit plugin selection, serializable capability metadata, and versions derived from installed distributions. Semantic content stays separate from representations, composition, and rendering; SVG and events must remain independently installable and composable. Manim is a suggested inspiration, but the Python linter reference remains to be identified. This is proposed work, not an implemented API. Milestone m-12 tracks contract design (ART-46), implementation (ART-47), and migration (ART-48); the earlier decorator decision describes the current implementation pending review of its replacement.
+
+The current core exposes phase-specific context **protocols** to plugin functions and injects its own concrete implementations. Plugins should not need to import private core objects such as internal property-assignment classes. A context records or requests operations appropriate to its phase rather than exposing renderer internals by default.
 
 Provide an `artifactspec.testing` layer with fake contexts and helpers, and a pytest plugin with fixtures backed by those helpers. Test individual plugin behavior using fakes as well as end-to-end registration, parsing, validation, and rendering where applicable.
 
