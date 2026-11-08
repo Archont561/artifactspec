@@ -74,20 +74,25 @@ remote confirmation.
 
 `.github/workflows/pixi-sandbox.yml` follows the release-pinned publisher used
 in other Archont561 repositories: on relevant pushes to `main` or manual
-invocation, it packs, verifies, and publishes `sandbox/gherkin-linux-64`.
+invocation, it packs, verifies, and publishes `sandbox/developer-linux-64`.
 It uses a checksum-verified pixi-sandbox 0.9.0 release and the repository token.
 The workflow has not yet been run in this repository.
 
-This bundle contains only the isolated `gherkin` environment and the Pixi and
-pixi-sandbox tools; it is **not** a developer-environment backup. The `developer`
-bundle in `pixi-sandbox.toml` is not published by this workflow: native
-pixi-sandbox 0.9.0 rejects the local editable PyPI paths for `artifactspec` and
-`artifactspec-manim` in the default lock. Before enabling developer publishing,
-provide a supported wheel-only or separate tooling environment, regenerate the
-Pixi lock, and verify both the publisher and offline restore. Bun's installed
-`node_modules` are not packed by this Gherkin-only bundle.
+The bundle contains the locked `default` and `gherkin` environments plus Pixi
+and pixi-sandbox. Local project source paths are deliberately not Pixi
+requirements, because native pixi-sandbox only transports locked wheels.
+`pixi run install-projects` installs both local projects as non-editable packages
+using the locked Hatchling backend and without dependency resolution or build
+isolation. Package-test and coverage tasks run this first and use the source
+paths in `PYTHONPATH` so coverage measures the checkout. This does not add local
+project wheels to the sandbox; the checkout is required after restore. Bun's
+`node_modules` are not packed, so Bun tooling requires a separate install.
 
-Once published, use the upstream pixi-sandbox restore instructions with the
-`sandbox/gherkin-linux-64` branch. No restore launcher is currently provided
-here. GitHub Actions needs permission to write repository contents for the
-publisher; publishing is not attempted on pull requests.
+Once the branch is published and available from `origin` (or transferred into
+the local Git repository), run `scripts/restore.sh`. Set
+`PIXI_SANDBOX_FETCH=skip` on an airlocked host to forbid a fetch, and
+`PIXI_SANDBOX_USER_TOOLS=skip` to avoid registering user tools. After restore,
+run `pixi run --frozen install-projects` to install the local projects. GitHub
+Actions needs permission to write repository contents for the publisher;
+publishing is not attempted on pull requests. Publisher and offline restore
+behavior still need verification on GitHub.

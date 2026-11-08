@@ -22,15 +22,16 @@ pixi run -e gherkin lint-features
 pixi run hooks-install
 ```
 
-Each package's `pyproject.toml` declares its version. `VERSION` reads the
-installed distribution metadata generated from that declaration, so reinstall
-or rebuild the package after changing it. Each package has a BDD test for this
-contract. Script tests live in `scripts/tests/`.
+Each package's `pyproject.toml` declares its version. `VERSION` reads installed
+distribution metadata. Package test and coverage tasks first install the local
+projects without network access, then test the current source via `PYTHONPATH`.
+For other work needing installed packages, run `pixi run install-projects` and
+rerun it after changing package metadata or when a clean Pixi environment is
+created. Script tests live in `scripts/tests/`.
 
 See [CI](docs/ci.md) and [release preparation](docs/releases.md) for
-compatibility, security, packaging checks, and sandbox publishing. The current
-sandbox publisher covers only Gherkin tooling, not the developer environment.
-Examples remain empty until the API is stable.
+compatibility, security, packaging checks, and sandbox publishing. Examples
+remain empty until the API is stable.
 
 ## License
 
