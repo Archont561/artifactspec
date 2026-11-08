@@ -24,9 +24,11 @@ def select_range(
     head = commit(repo, head)
     missing_base = not base or all(char == "0" for char in base)
 
-    if event == "push" and (forced or missing_base):
+    if (event == "push" and (forced or missing_base)) or (
+        event == "workflow_dispatch" and missing_base
+    ):
         if not default or not ref.startswith("refs/heads/") or ref == "refs/heads/":
-            raise ValueError("push branch or default branch is unavailable")
+            raise ValueError("branch or default branch is unavailable")
         # On the default branch, origin/<default> already points to the new
         # head. Comparing against it would silently select no commits.
         if ref == f"refs/heads/{default}":
@@ -34,8 +36,6 @@ def select_range(
         default_head = commit(repo, f"refs/remotes/origin/{default}")
         base = git(repo, "merge-base", default_head, head)
     elif missing_base:
-        if event == "workflow_dispatch":
-            return head
         raise ValueError("comparison base is unavailable")
     else:
         base = commit(repo, base)

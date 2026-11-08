@@ -134,6 +134,13 @@ def test_manual_run_without_base_checks_all_reachable_commits(history):
     assert result.stdout.strip() == head
 
 
+def test_manual_branch_run_without_base_checks_since_default_merge_base(history):
+    _, base, _, head = history
+    result = select(history, base="", event="workflow_dispatch")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == f"{base}..{head}"
+
+
 def test_force_push_missing_default_branch_fails_closed(history):
     repo, _, _, _ = history
     git(repo, "update-ref", "-d", "refs/remotes/origin/main")
