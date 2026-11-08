@@ -5,6 +5,7 @@
     "": {
       "name": "artifactspec-dev",
       "devDependencies": {
+        "@taskless/vale-linux-x64": "3.26.0-20261102164455",
         "backlog.md": "1.53.0",
         "skills": "1.7.4",
       },
@@ -12,6 +13,8 @@
   },
   "packages": {
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
+
+    "@taskless/vale-linux-x64": ["@taskless/vale-linux-x64@3.26.0-20261102164455", "", { "os": "linux", "cpu": "x64" }, "sha512-ULZPna6eb3hX8RsHte3GphvR9aTH9zKvV+D86RQM2mOg/z73qpgfRBdi3LNfA2vbpOPCGtz/keEFEcmREGFciQ=="],
 
     "backlog.md": ["backlog.md@1.53.0", "", { "optionalDependencies": { "backlog.md-darwin-arm64": "1.53.0", "backlog.md-darwin-x64": "1.53.0", "backlog.md-linux-arm64": "1.53.0", "backlog.md-linux-x64": "1.53.0", "backlog.md-windows-arm64": "1.53.0", "backlog.md-windows-x64": "1.53.0" }, "bin": { "backlog": "cli.js" } }, "sha512-VfYdR7RGu+mgEpSbHpBfdsyHVlJ+d4DIRzixkmyLqsfgCk4pLPDRhNkbu6dU3UgLEbQfxKhDuXUIbN/RLyGk1A=="],
 

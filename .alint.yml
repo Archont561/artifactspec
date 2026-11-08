@@ -67,3 +67,8 @@ rules:
     paths: codecov.yml
     level: error
     message: Codecov configuration is missing.
+  - id: require-vale-config
+    kind: file_exists
+    paths: .vale.ini
+    level: error
+    message: Required Vale configuration is missing.

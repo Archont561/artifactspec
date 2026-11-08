@@ -42,3 +42,20 @@ Do not push, create a pull request, merge, tag, publish, or release without expl
 - When merging an authorized pull request, use rebase merge only; never use merge commits or squash merges.
 - For repository skills, read the relevant `.agents/skills/<name>/SKILL.md` when needed.
 - Use `pixi run backlog` for Backlog.md commands and `pixi run skills` for the Skills CLI.
+
+## Documentation quality
+
+Use Vale for spelling, terminology, and selected editorial rules. Use alint for
+repository structure and configuration; keep its rules separate in `.alint.yml`.
+After documentation changes, run `pixi run --locked lint-prose` and
+`pixi run --locked alint`. Vale scans the root guides, package READMEs, `docs/`,
+and Markdown under `backlog/`. Errors fail the check; warnings are advisory and
+should be reviewed. Backlog prose uses a smaller editorial rule set.
+
+Preserve technical accuracy, code examples, and links when fixing findings.
+Add legitimate terms to `.vale/styles/config/vocabularies/Project/accept.txt`;
+do not disable rules merely to silence findings. The selected upstream style
+rules are vendored and pinned, so routine checks do not run `vale sync`. See
+`.vale/styles/README.md` before updating them. The locked Bun installation
+provides the Linux x86-64 Vale executable; it is not part of the offline Pixi
+sandbox. Ruff remains responsible for Python code quality.
