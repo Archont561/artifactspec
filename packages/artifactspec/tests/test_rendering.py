@@ -113,7 +113,7 @@ def test_report_representation_does_not_claim_a_report_renderer(tmp_path):
     composition = compose(
         content, output="report", representation="diagram", registry=registry()
     )
-    assert composition.elements[0].text == "2000-01-01: Hello"
+    assert composition.elements[0].value.text == "2000-01-01: Hello"
     with pytest.raises(PipelineError, match="no renderers"):
         render(
             spec,
@@ -157,13 +157,13 @@ def test_fakes_record_representation_and_renderer_operations(
 ):
     content = Content((ContentNode("x", "text", (("value", "hello"),), ()),))
     rep = artifactspec_representation_context(content)
-    rep.text("x", "hello", x=1, y=2)
+    rep.add("x", "hello")
     output = artifactspec_renderer_context(rep.finish())
     output.emit(b"hello", media_type="text/plain", editable=True)
-    assert rep.elements[0].text == "hello"
+    assert rep.elements[0].value == "hello"
     assert output.artifact == (b"hello", "text/plain", True)
     with pytest.raises(ValueError, match="unknown content"):
-        rep.text("missing", "bad", x=1, y=2)
+        rep.add("missing", "bad")
 
 
 def test_same_event_content_supports_distinct_image_and_report_compositions():
@@ -174,8 +174,8 @@ def test_same_event_content_supports_distinct_image_and_report_compositions():
     )
     image = compose(content, output="image", representation="diagram", registry=reg)
     report = compose(content, output="report", representation="diagram", registry=reg)
-    assert image.elements[0].text == "2000-01-01 — Shared"
-    assert report.elements[0].text == "2000-01-01: Shared"
+    assert image.elements[0].value.text == "2000-01-01 — Shared"
+    assert report.elements[0].value.text == "2000-01-01: Shared"
     assert image.limitations and report.limitations
 
 

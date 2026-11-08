@@ -94,7 +94,7 @@ def report_composition(state):
     composition = state["composition"]
     assert composition.output == "report"
     assert any(
-        getattr(item, "text", None) == "2000-01-01: Hello & world"
+        getattr(item.value, "text", None) == "2000-01-01: Hello & world"
         for item in composition.elements
     )
     assert not hasattr(composition, "playback")
@@ -188,7 +188,9 @@ def timeline_forms(state):
         ("event", {"date": "2001-01-01", "value": "First"}),
         ("event", {"date": "1900-02-03", "value": "Second"}),
     ]
-    assert [[element.text for element in form.elements] for form in state["forms"]] == [
+    assert [
+        [element.value.text for element in form.elements] for form in state["forms"]
+    ] == [
         ["2001-01-01 — First", "1900-02-03 — Second"],
         ["2001-01-01: First", "1900-02-03: Second"],
     ]
@@ -208,8 +210,8 @@ def no_playback(state):
     for form in state["forms"]:
         assert not hasattr(form, "playback")
         assert not hasattr(form.elements[0], "time")
-    assert state["forms"][0].elements[0].y == 40
-    assert state["forms"][0].elements[1].y == 110
+    assert state["forms"][0].elements[0].value.y == 40
+    assert state["forms"][0].elements[1].value.y == 110
 
 
 @given("a specification that produces a source-linked SVG image")

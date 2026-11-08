@@ -23,26 +23,11 @@ class Content:
 
 
 @dataclass(frozen=True, slots=True)
-class TextElement:
-    x: float
-    y: float
-    text: str
-    color: str
-    size: float
+class Element:
+    """A plugin-owned representation value and the sources that produced it."""
+
+    value: object
     provenance: tuple[SourceSpan, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class RectangleElement:
-    x: float
-    y: float
-    width: float
-    height: float
-    color: str
-    provenance: tuple[SourceSpan, ...]
-
-
-VisualElement = TextElement | RectangleElement
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,5 +38,5 @@ class Composition:
     representation: str
     width: float
     height: float
-    elements: tuple[VisualElement, ...]
+    elements: tuple[Element, ...]
     limitations: tuple[str, ...] = ()

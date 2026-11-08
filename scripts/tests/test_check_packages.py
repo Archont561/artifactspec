@@ -78,6 +78,12 @@ def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
             and "--help" in call
             for call in calls
         )
+    assert any(
+        "find_spec('artifactspec_svg') is None" in arg
+        and "event_image.media_type" in arg
+        for call in calls
+        for arg in call
+    )
     assert sum("render" in call and "--help" not in call for call in calls) == 7
     assert not any("--builtin-basic" in call for call in calls)
     assert sum("render" in call and "--format" in call for call in calls) == 4

@@ -6,6 +6,7 @@ from artifactspec.core.contexts import (
     RepresentationContext,
 )
 from artifactspec_svg import renderer as _renderer  # noqa: F401
+from artifactspec_svg.elements import Rectangle, Text
 from artifactspec_svg.registration import plugin
 
 
@@ -44,19 +45,11 @@ def diagram(context: RepresentationContext) -> None:
         "Diagram uses a fixed canvas and does not wrap or measure text; inspect for clipping and font differences."
     )
     if node.object_type == "text":
-        context.text(
+        context.add(
             node.name,
-            properties.get("value", ""),
-            x=20,
-            y=y,
-            color=properties.get("color", "black"),
+            Text(20, y, properties.get("value", ""), properties.get("color", "black")),
         )
     else:
-        context.rectangle(
-            node.name,
-            x=20,
-            y=y,
-            width=120,
-            height=40,
-            color=properties.get("color", "black"),
+        context.add(
+            node.name, Rectangle(20, y, 120, 40, properties.get("color", "black"))
         )

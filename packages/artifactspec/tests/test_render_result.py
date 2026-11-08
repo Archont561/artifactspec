@@ -4,12 +4,13 @@ import json
 from xml.etree import ElementTree
 
 import pytest
+from artifactspec_svg.elements import Text
 from hypothesis import given
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
 from artifactspec.cli import app
-from artifactspec.core.models import Composition, TextElement
+from artifactspec.core.models import Composition, Element
 from artifactspec.core.syntax import Position, SourceSpan
 from artifactspec.plugin import Phrase, Representation
 
@@ -20,7 +21,7 @@ def test_provenance_status_distinguishes_missing_and_empty_elements(linked):
 
     span = SourceSpan("scene.art", Position(2, 1), Position(2, 5))
     elements = tuple(
-        TextElement(0, index, "text", "black", 20, (span,) if has_link else ())
+        Element(Text(0, index, "text", "black", 20), (span,) if has_link else ())
         for index, has_link in enumerate(linked)
     )
     composition = Composition("image", "diagram", 640, 480, elements)
@@ -197,11 +198,11 @@ def assign(ctx): ctx.set("value", ctx.value)
 @plugin.representation("exact")
 def layout(ctx):
     for node in ctx.content.nodes:
-        ctx.text(node.name, dict(node.properties)["value"], x=20, y=40)
+        ctx.add(node.name, (20, 40, dict(node.properties)["value"]))
 @plugin.renderer("exact-svg")
 def render(ctx):
-    element = ctx.composition.elements[0]
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text x="{element.x}" y="{element.y}">{escape(element.text)}</text></svg>'
+    x, y, text = ctx.composition.elements[0].value
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text x="{x}" y="{y}">{escape(text)}</text></svg>'
     ctx.emit(svg.encode("utf-8"), media_type="image/svg+xml", editable=True)
 """
     fixture = installed_plugin_factory(manifest=manifest, module_source=plugin)
@@ -272,7 +273,7 @@ def create(ctx): ctx.create("text")
 @plugin.representation("layout")
 def layout(ctx):
     ctx.warn("layout limitation")
-    ctx.text(ctx.content.nodes[0].name, "x", x=0, y=0)
+    ctx.add(ctx.content.nodes[0].name, "x")
 @plugin.renderer("broken")
 def broken(ctx):
     ctx.warn("renderer limitation")
@@ -346,7 +347,7 @@ def test_render_propagates_incomplete_composition_provenance(
 
     span = SourceSpan("scene.art", Position(2, 1), Position(2, 5))
     elements = tuple(
-        TextElement(0, index, "text", "black", 20, (span,) if has_link else ())
+        Element(Text(0, index, "text", "black", 20), (span,) if has_link else ())
         for index, has_link in enumerate(linked)
     )
     composition = Composition("image", "diagram", 640, 480, elements)

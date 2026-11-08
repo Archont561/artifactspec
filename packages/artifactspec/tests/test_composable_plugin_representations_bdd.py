@@ -37,13 +37,11 @@ def register_plugins(state):
 
     @shapes.representation("diagram")
     def shape(context):
-        context.rectangle(
-            context.node.name, x=0, y=context.index * 40, width=10, height=10
-        )
+        context.add(context.node.name, ("rectangle", context.index * 40))
 
     @events.representation("diagram")
     def event(context):
-        context.text(context.node.name, "event", x=0, y=context.index * 40)
+        context.add(context.node.name, ("event", context.index * 40))
 
     state["registry"] = Registry()
     state["registry"].register(shapes)
@@ -62,12 +60,8 @@ def compose_objects(state):
 
 @then("their visual elements appear together in declaration order")
 def check_elements(state):
-    from artifactspec.core.models import RectangleElement, TextElement
-
     elements = state["composition"].elements
-    assert isinstance(elements[0], RectangleElement)
-    assert isinstance(elements[1], TextElement)
-    assert elements[1].y == 40
+    assert [element.value for element in elements] == [("rectangle", 0), ("event", 40)]
 
 
 def test_overlapping_representation_target_types_are_rejected():

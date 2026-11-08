@@ -23,44 +23,53 @@ output syntax and typed contributions in its constructor, then attach handlers
 using decorators. For example:
 
 ```python
-from html import escape
-from artifactspec.plugin import Phrase, Plugin, Property, Renderer, Representation
+from dataclasses import dataclass
+from typing import ClassVar
+from artifactspec.plugin import Phrase, Plugin, Renderer, Representation
 
 plugin = Plugin(
     id="shapes",
     outputs={"image": "Output image."},
     phrases=(Phrase("circle", "circle", "Draw {name}."),),
-    properties=(Property("color", ("circle",), "Color {reference} with {value}."),),
     representations=(Representation("diagram", ("circle",)),),
-    renderers=(Renderer("svg"),),
+    renderers=(Renderer("example-svg"),),
 )
+
+@dataclass(frozen=True)
+class Circle:
+    y: int
+    media_type: ClassVar[str] = "image/svg+xml"
+
+    def __str__(self):
+        return f'<circle cx="20" cy="{self.y}" r="10"/>'
 
 @plugin.phrase("circle")
 def circle(context):
     context.create("circle")
 
-@plugin.property("color")
-def color(context):
-    context.set("color", context.value)
-
 @plugin.representation("diagram")
 def diagram(context):
-    context.text(context.node.name, "circle", x=20, y=40 + 70 * context.index)
+    context.add(context.node.name, Circle(y=40 + 70 * context.index))
 
-@plugin.renderer("svg")
+@plugin.renderer("example-svg")
 def render(context):
-    text = "".join(f"<text>{escape(element.text)}</text>" for element in context.composition.elements)
-    context.emit(f'<svg xmlns="http://www.w3.org/2000/svg">{text}</svg>'.encode(),
+    values = [element.value for element in context.composition.elements]
+    if any(getattr(value, "media_type", None) != "image/svg+xml" for value in values):
+        raise TypeError("unsupported element format")
+    markup = "".join(str(value) for value in values)
+    context.emit(f'<svg xmlns="http://www.w3.org/2000/svg">{markup}</svg>'.encode(),
                  media_type="image/svg+xml", editable=True)
 ```
 
-The example renderer supports text elements only. Real renderers must validate
-the element types and content they accept. Decorator names must match a declared
-contribution; duplicate handlers and modifications after registration fail.
-`Plugin.to_dict()` returns an independent JSON-serializable dictionary, including
-all syntax and semantic metadata. It does not invoke handlers. Declaring a
-capability without attaching a handler allows metadata inspection, but trying to
-execute it reports a missing-handler error.
+The example emits only trusted, constant markup with an integer coordinate.
+Renderers must validate the formats they accept; plugins must validate and escape
+any user-controlled data in their element strings. This example is illustrative;
+the SVG plugin's renderer also rejects objects that have no custom string method.
+Decorator names must match a declared contribution; duplicate handlers and
+modifications after registration fail. `Plugin.to_dict()` returns an independent
+JSON-serializable dictionary, including all syntax and semantic metadata. It does
+not invoke handlers. Declaring a capability without attaching a handler allows
+metadata inspection, but trying to execute it reports a missing-handler error.
 
 A plugin distribution advertises the object directly:
 
@@ -103,6 +112,23 @@ plugins may share a representation name only for disjoint target types. Core
 then dispatches each semantic node to its matching representation handler. Use
 `registry.representation_handler(name, object_type, output=...)` when selecting
 a handler directly. The output is not a guarantee that a renderer exists.
+
+## Migration of representation elements
+
+The core no longer defines `TextElement`, `RectangleElement`, or the
+`RepresentationContext.text()` and `.rectangle()` methods. Define element
+classes in your plugin and call `context.add(node_name, value)` instead. Core
+wraps each value in an `Element` with the named node's source provenance;
+renderers access the original value as `element.value`. The composition and
+wrapper are frozen, but plugin values must enforce their own immutability.
+
+The SVG renderer accepts plugin values whose `media_type` is `image/svg+xml`
+and that implement `__str__`. Their string must be an SVG fragment. The SVG
+plugin exports `Text` and `Rectangle` from `artifactspec_svg.elements`; the
+events plugin provides its own compatible event text without importing the SVG
+plugin. A format marker is not a sandbox or a sanitizer: all plugin code and
+markup are trusted, and element authors must escape and validate their content.
+Report values need not be SVG fragments and cannot be passed to the SVG renderer.
 
 ## Migration from JSON manifests
 

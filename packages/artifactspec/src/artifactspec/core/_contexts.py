@@ -1,6 +1,6 @@
 """Core context implementations; plugins depend only on public protocols."""
 
-from artifactspec.core.models import Composition, Content, ContentNode, VisualElement
+from artifactspec.core.models import Composition, Content, ContentNode, Element
 from artifactspec.core.syntax import SourceSpan
 
 
@@ -50,7 +50,7 @@ class RepresentationBuilder:
         self.representation = representation
         self.width = 640.0
         self.height = 480.0
-        self.elements: list[VisualElement] = []
+        self.elements: list[Element] = []
         self.limitations: list[str] = []
 
     def warn(self, message: str) -> None:
@@ -63,45 +63,8 @@ class RepresentationBuilder:
                 return node.provenance
         raise ValueError(f"unknown content object {name!r}")
 
-    def text(
-        self,
-        node: str,
-        value: str,
-        *,
-        x: float,
-        y: float,
-        size: float = 20,
-        color: str = "black",
-    ) -> None:
-        from artifactspec.core.models import TextElement
-
-        if not isinstance(value, str):
-            raise TypeError("text must be a string")
-        _numbers(x, y, size)
-        if size <= 0:
-            raise ValueError("text size must be positive")
-        nonempty(color, "color")
-        self.elements.append(TextElement(x, y, value, color, size, self._origin(node)))
-
-    def rectangle(
-        self,
-        node: str,
-        *,
-        x: float,
-        y: float,
-        width: float,
-        height: float,
-        color: str = "black",
-    ) -> None:
-        from artifactspec.core.models import RectangleElement
-
-        _numbers(x, y, width, height)
-        if width <= 0 or height <= 0:
-            raise ValueError("rectangle dimensions must be positive")
-        nonempty(color, "color")
-        self.elements.append(
-            RectangleElement(x, y, width, height, color, self._origin(node))
-        )
+    def add(self, node: str, value: object) -> None:
+        self.elements.append(Element(value, self._origin(node)))
 
     def finish(self) -> Composition:
         from artifactspec.core.models import Composition
@@ -114,18 +77,6 @@ class RepresentationBuilder:
             tuple(self.elements),
             tuple(self.limitations),
         )
-
-
-def _numbers(*values: float) -> None:
-    import math
-
-    if any(
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(value)
-        for value in values
-    ):
-        raise ValueError("coordinates and dimensions must be finite numbers")
 
 
 class RendererBuilder:

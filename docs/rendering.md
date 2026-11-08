@@ -122,11 +122,14 @@ these rather than importing private core implementations:
 - `RepresentationContext` receives immutable `Content`, the current `node`,
   its zero-based declaration-order `index`, and the requested output. Core
   dispatches each node to the selected representation's handler for that
-  semantic type. Handlers emit static text or rectangles linked to named nodes
-  and can report limitations with `warn(message)`.
-- `RendererContext` receives an immutable `Composition`, may report limitations
-  with `warn(message)`, and emits exactly one complete byte artifact with a
-  media type and editable flag.
+  semantic type. Handlers call `add(node_name, value)` with a plugin-owned
+  element value linked to that node's provenance, and can report limitations
+  with `warn(message)`.
+- `RendererContext` receives a frozen `Composition` of generic element wrappers,
+  each exposing its plugin-owned `value` and source `provenance`. Values may be
+  mutable unless the plugin makes them immutable. The renderer may report
+  limitations with `warn(message)` and emits exactly one complete byte artifact
+  with a media type and editable flag.
 
 `artifactspec.testing` supplies recording fake contexts for each phase. Pytest
 fixtures are opt-in: declare `pytest_plugins = ["artifactspec.testing.pytest_plugin"]`
@@ -173,10 +176,12 @@ The SVG and events plugins each contribute `diagram` handlers for their own
 semantic types, so both can participate in one image composition. A missing
 handler for any node and output is an explicit error; for example, SVG shapes
 cannot be composed as a report. The SVG renderer supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
-text and reports this limitation; excess rows are rejected. The renderer allows
-a limited set of named colors or hexadecimal colors, rejects unsupported colors and
-characters forbidden in XML, and escapes text. It preserves editable SVG source,
-not a raster or a PDF. Rendering is not factual validation or visual review.
+text and reports this limitation; excess rows are rejected. The SVG plugin's text
+and rectangle elements validate colors and escape text, including rejection of
+characters forbidden in XML. The SVG renderer checks the SVG media-type marker
+before converting plugin values to strings. Plugin-provided markup is trusted,
+not sanitized by core. The renderer preserves editable SVG source, not a raster
+or a PDF. Rendering is not factual validation or visual review.
 
 The renderer emits bytes to the core. Only after it completes successfully does
 the core write a temporary file in the destination directory and atomically
