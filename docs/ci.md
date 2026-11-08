@@ -56,8 +56,10 @@ python scripts/detect_changes.py --base BASE --head HEAD --event pull_request
 
 Full CI also runs mypy, builds and checks both distributions, runs a Python
 dependency audit, and tests the core package on Python 3.11–3.14 across Linux,
-macOS, and Windows. These matrix jobs install with pip rather than Pixi. The Manim-named package
-is a version-only placeholder; no renderer tests currently exist. The
+macOS, and Windows. These matrix jobs install with pip rather than Pixi. Full
+CI also imports Manim and checks FFmpeg in its optional Pixi environment. The
+Manim-named distribution is a version-only placeholder; no renderer tests
+currently exist. The
 package metadata has no upper Python bound, so later Python versions are not
 currently covered by this matrix. The matrix awaits verification on GitHub.
 
@@ -65,8 +67,13 @@ currently covered by this matrix. The matrix awaits verification on GitHub.
 Pixi environment using pip-audit and skips editable distributions. It is also
 run weekly in a separate scheduled workflow. It does not audit OS packages,
 conda native libraries, Bun dependencies, or GitHub Actions. Dependabot proposes
-updates for GitHub Actions, Python package metadata, and the root npm manifest; it does not update `pixi.lock`. Review
-updates and regenerate the Pixi lock where necessary. Hatchling updates to 1.30
+updates for GitHub Actions, Python package metadata, and the root npm manifest;
+it does not update `pixi.lock`. The separate relock workflow checks Pixi lock
+consistency on pull requests and, for same-repository non-Dependabot branches,
+can commit a refreshed lock and dispatch CI. Fork and Dependabot PRs require a
+manual lock update with suitable permissions. The workflow does not publish a
+sandbox from a pull request. Review bot changes and require the repaired-head CI
+to pass; the bot has not yet been verified in this repository. Hatchling updates to 1.30
 or newer are temporarily ignored because the locked Twine 6.2 rejects the newer
 metadata. Upgrade and relock Twine, then verify package builds before removing
 that ignore. Existing incompatible Dependabot PRs will remain red until revised
@@ -85,15 +92,17 @@ remote confirmation.
 in other Archont561 repositories: on relevant pushes to `main` or manual
 invocation, it packs, verifies, and publishes `sandbox/developer-linux-64`.
 It uses a checksum-verified pixi-sandbox 0.9.0 release and the repository token.
-The workflow has not yet been run in this repository.
+It has succeeded on main.
 
 The bundle contains the locked `default` and `gherkin` environments plus Pixi
-and pixi-sandbox. Local project source paths are deliberately not Pixi
+and pixi-sandbox. The optional `manim` environment is not packed; it uses the
+PyPI Manim distribution with conda-forge's prebuilt ManimPango and PyCairo
+bindings and FFmpeg. Local project source paths are deliberately not Pixi
 requirements, because native pixi-sandbox only transports locked wheels.
 `pixi run install-projects` installs both local projects as non-editable packages
 using the locked Hatchling backend and without dependency resolution or build
-isolation. Package-test and coverage tasks run this first and use the source
-paths in `PYTHONPATH` so coverage measures the checkout. This does not add local
+isolation. Package-test and coverage tasks run this first; default-environment
+activation adds the source paths to `PYTHONPATH` so coverage measures the checkout. This does not add local
 project wheels to the sandbox; the checkout is required after restore. Bun's
 `node_modules` are not packed, so Bun tooling requires a separate install.
 
@@ -103,5 +112,5 @@ the local Git repository), run `scripts/restore.sh`. Set
 `PIXI_SANDBOX_USER_TOOLS=skip` to avoid registering user tools. After restore,
 run `pixi run --frozen install-projects` to install the local projects. GitHub
 Actions needs permission to write repository contents for the publisher;
-publishing is not attempted on pull requests. Publisher and offline restore
-behavior still need verification on GitHub.
+publishing is not attempted on pull requests. Both publishing and offline restore
+have succeeded, but the newly added Manim environment has not yet been verified.

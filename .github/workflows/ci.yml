@@ -140,6 +140,23 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         run: echo 'Codecov upload skipped for fork pull requests; tests and coverage still ran.'
 
+  manim-environment:
+    name: Optional Manim environment
+    needs: changes
+    if: needs.changes.outputs.run_full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          pixi-version: v0.84.1
+          run-install: false
+      - run: pixi run --locked -e manim -x python -c "import manim; print(manim.__version__)"
+      - run: pixi run --locked -e manim -x ffmpeg -version
+
   compatibility:
     name: Core Python ${{ matrix.python }} on ${{ matrix.os }}
     needs: changes
@@ -166,7 +183,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [changes, commit-messages, docs, scripts, full, compatibility]
+    needs: [changes, commit-messages, docs, scripts, full, compatibility, manim-environment]
     runs-on: ubuntu-latest
     steps:
       - name: Verify selected checks
@@ -177,6 +194,7 @@ jobs:
           SCRIPTS_RESULT: ${{ needs.scripts.result }}
           FULL_RESULT: ${{ needs.full.result }}
           COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          MANIM_RESULT: ${{ needs.manim-environment.result }}
           RUN_DOCS: ${{ needs.changes.outputs.run_docs }}
           RUN_SCRIPTS: ${{ needs.changes.outputs.run_scripts }}
           RUN_FULL: ${{ needs.changes.outputs.run_full }}
@@ -189,4 +207,5 @@ jobs:
           [[ "$RUN_SCRIPTS" != true || "$SCRIPTS_RESULT" == success ]]
           [[ "$RUN_FULL" != true || "$FULL_RESULT" == success ]]
           [[ "$RUN_FULL" != true || "$COMPATIBILITY_RESULT" == success ]]
+          [[ "$RUN_FULL" != true || "$MANIM_RESULT" == success ]]
           echo 'All selected CI checks passed.'

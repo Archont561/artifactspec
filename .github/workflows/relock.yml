@@ -1,0 +1,74 @@
+# Based on pixi-sandbox's relock workflow; publishing remains main-only.
+name: Relock
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relock-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Lock guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          pixi-version: v0.84.1
+          run-install: false
+      - run: pixi lock --check
+
+  relock:
+    name: Refresh Pixi lock
+    needs: guard
+    if: ${{ always() && needs.guard.result == 'failure' && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Refuse read-only pull requests
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
+        run: echo '::error::Cannot push a lock repair to a fork or Dependabot PR; regenerate pixi.lock and push it with appropriate permissions.' && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          pixi-version: v0.84.1
+          run-install: false
+      - run: pixi lock
+      - run: pixi lock --check
+      - id: commit
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
+        with:
+          commit_message: 'chore(lock): refresh pixi.lock for PR #${{ github.event.pull_request.number }}'
+          commit_user_name: pixi-sandbox[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_author: pixi-sandbox[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          file_pattern: pixi.lock
+      # GITHUB_TOKEN pushes do not trigger CI. The existing CI workflow is on the
+      # default branch, so this dispatch also works while the relock workflow is
+      # being introduced for the first time. Never publish a sandbox from a PR.
+      - name: Require an actual lock repair
+        if: ${{ steps.commit.outputs.changes_detected != 'true' }}
+        run: echo '::error::Lock guard failed but relocking made no change; inspect the guard failure.' && exit 1
+      - name: Dispatch CI for the repaired branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          REPAIRED_SHA: ${{ steps.commit.outputs.commit_hash }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$HEAD_REF" | cut -f1)" = "$REPAIRED_SHA"
+          gh workflow run ci.yml --ref "$HEAD_REF"

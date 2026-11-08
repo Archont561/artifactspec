@@ -26,8 +26,9 @@ pixi global install --channel conda-forge git gh
 pixi global install --channel https://prefix.dev/archont561/archont561 \
   --channel conda-forge 'pixi-sandbox=0.9.0'
 
-# Materialize both locked environments and the separately locked Bun tooling.
-pixi install --locked --all
+# Materialize the developer and Gherkin environments; Manim is opt-in.
+pixi install --locked
+pixi install --locked -e gherkin
 pixi run --locked bun-install
 pixi run --locked install-projects
 

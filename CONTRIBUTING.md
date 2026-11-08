@@ -11,15 +11,21 @@ The locked Pixi workspace targets Linux x86-64 (`linux-64`). Install Pixi, clone
 the repository, and run:
 
 ```sh
-pixi install --locked --all
+pixi install --locked
+pixi install --locked -e gherkin
 pixi run --locked bun-install
 pixi run --locked install-projects
 ```
 
 The local projects are not editable Pixi dependencies. Package test and coverage
 tasks install them without build isolation and test the current source. Re-run
-`install-projects` after changing package metadata. Git hooks are optional:
-`pixi run hooks-install` installs the checks defined in `lefthook.yml`.
+`install-projects` after changing package metadata. Default-environment activation exposes both checkout source trees via
+`PYTHONPATH`. The optional Manim environment is installed separately with
+`pixi install --locked -e manim`; see the [README](README.md). Run
+`pixi run install-hooks` to check and install the hooks defined in
+`lefthook.yml` (agents must do this at session start). Lefthook backs up existing
+non-Lefthook hooks as `.old` files but does not run those backups automatically;
+integrate any custom hooks you need separately.
 
 Alternatively, open the project with a Dev Containers-compatible editor. The
 container setup requires network access. For the published sandbox and offline

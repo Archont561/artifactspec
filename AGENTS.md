@@ -1,8 +1,14 @@
 # Agent instructions
 
+## Start each session with environment and hook setup
+
+Before the backlog survey or project changes, check that Pixi is available with `command -v pixi`. If it is missing, run `sh scripts/restore.sh` from the repository root to restore the developer sandbox, then add the registered user tools to the current shell's PATH with `export PATH="$HOME/.local/bin:$PATH"` and verify `pixi --version`. Restore may need access to the sandbox branch and registers user tools by default; see `docs/ci.md`. If restore fails or Pixi remains unavailable, report the blocker rather than claiming setup succeeded.
+
+Once Pixi is available, run `pixi run install-hooks` at the start of every session. It checks the Lefthook installation and installs or updates missing or stale hooks, then verifies them. Do not bypass a failed installation; report the error. Lefthook backs up existing non-Lefthook hooks as `.old` files but does not automatically execute those backups; inspect and integrate any needed custom hooks before relying on them.
+
 ## Start each session with a backlog survey
 
-Before planning or changing the project, use `pixi run backlog` to survey the current state. For an initial orientation, run:
+After environment and hook setup, before planning or changing the project, use `pixi run backlog` to survey the current state. For an initial orientation, run:
 
 ```sh
 pixi run backlog instructions overview

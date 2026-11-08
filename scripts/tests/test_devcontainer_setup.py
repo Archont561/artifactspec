@@ -60,7 +60,8 @@ def project_is_ready(state):
     commands = state["log"].read_text().splitlines()
     assert "global install --channel conda-forge git gh" in commands
     assert any("pixi-sandbox=0.9.0" in command for command in commands)
-    assert "install --locked --all" in commands
+    assert "install --locked" in commands
+    assert "install --locked -e gherkin" in commands
     assert "run --locked bun-install" in commands
     assert "run --locked install-projects" in commands
 
