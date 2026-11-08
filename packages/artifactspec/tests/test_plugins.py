@@ -185,7 +185,11 @@ def test_broken_metadata_reports_error_without_loading(
     with pytest.raises(RegistrationError, match="invalid manifest"):
         installed_plugins()
     fixture["manifest_path"].unlink()
-    with pytest.raises(RegistrationError, match="missing or duplicated"):
+    # importlib.metadata changed whether RECORD entries for missing files are
+    # retained: both forms must fail with an actionable diagnostic.
+    with pytest.raises(
+        RegistrationError, match="missing or duplicated|cannot read manifest"
+    ):
         installed_plugins()
     (fixture["info"] / "RECORD").write_text("", encoding="utf-8")
     with pytest.raises(RegistrationError, match="file records"):
