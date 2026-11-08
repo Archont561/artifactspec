@@ -10,8 +10,8 @@ a minimal static SVG rendering pipeline is available with the optional SVG plugi
 
 The core does not reserve a content phrase, property statement, or output
 statement form. Installed plugins declare complete statement templates in
-static schema version 3 metadata. The core matches those templates without
-importing or calling plugin code; schema versions 1 and 2 must migrate.
+typed `Plugin` declarations. Installed plugin modules are imported during
+discovery; the core matches their declarations without invoking handlers.
 For example, with both the SVG and event plugins installed:
 
 ```text
@@ -26,7 +26,7 @@ Set label of opening to "Berlin Wall opens".
 These specific statements are plugin declarations, not a universal grammar.
 Different plugins may declare different full forms. Templates use typed
 placeholders for object names, references and JSON string values; see
-[the plugin contract](plugins.md) for the exact metadata and matching rules.
+[the plugin contract](plugins.md) for the typed declarations and matching rules.
 Each nonblank line must match exactly one output declaration or content
 statement. The first nonblank line selects the output, and later output
 statements are rejected. Line endings are LF, CRLF or CR; other Unicode line
@@ -38,9 +38,9 @@ immutable `Document` with typed creation and property nodes. Lines and columns
 are one-based Unicode code-point positions; span ends are exclusive. A failure
 returns no partial document. Diagnostics distinguish missing or unknown output,
 unknown or ambiguous statements, malformed string values, and repeated output
-declarations. Output selection and statements are matched only against static
-metadata; `parse` does not execute plugin handlers. Runtime rendering separately
-loads plugins according to the trust policy.
+declarations. Output selection and statements are matched only against declarative
+metadata; `parse` does not execute plugin handlers. Discovering an installed
+plugin imports its module according to the trust policy.
 
 ## Reference semantics
 
@@ -58,7 +58,7 @@ The parser preserves references; `artifactspec.core.validation.validate` checks 
 rules and returns a `ValidationResult` containing diagnostics and resolved
 references. Duplicate names, unresolved and ambiguous references are errors.
 Version 3 plugin metadata permits exact object-type checking for properties;
-legacy version 1 and 2 metadata must be migrated. A result is valid if it has no errors;
+old JSON-manifest plugins must migrate to typed objects. A result is valid if it has no errors;
 warnings must still be reviewed. Validation does not execute plugin handlers or
 prove factual correctness, rendering support, or visual quality. Syntax errors
 currently stop parsing at the first error; multiple independent semantic errors
@@ -128,16 +128,16 @@ status 0 means no errors (warnings can still be present), 1 means validation
 errors, and 2 means an input, metadata, or command-line error. Input is UTF-8.
 Diagnostics go to standard output; operational errors go to standard error.
 Multiple semantic errors are reported together, but syntax parsing currently
-stops at the first error. Installed capabilities are discovered from static
-manifests; the command does not load plugins or execute handlers. Legacy
-version 1 and 2 manifests require migration to schema 3.
+stops at the first error. Installed capabilities are discovered from
+plugin objects; the command imports installed plugins but does not execute their
+handlers. Use `--no-plugin-autoload --plugin ID` to select trusted plugins.
 
 ## Editor diagnostics
 
 Run `artifactspec lsp` as a language server over standard input and output. It
-loads installed static manifests at startup, uses the same validator and
-validation codes as the CLI, and does not import plugin modules. Configure an
-LSP client to start that command for ArtifactSpec documents; the server does not
+imports installed plugin objects at startup and uses the same validator and
+validation codes as the CLI. Use `--no-plugin-autoload --plugin ID` to select
+trusted plugins. Configure an LSP client to start that command for ArtifactSpec documents; the server does not
 register a file extension or install editor configuration. Restart it after
 installing or changing plugins so that it can rediscover their metadata.
 

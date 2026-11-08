@@ -48,9 +48,9 @@ restore procedure, see [CI](docs/ci.md).
 ## Built-in CLI commands
 
 Each public Python module directly inside
-`packages/artifactspec/src/artifactspec/commands/` exposes an `app = typer.Typer()`.
+`packages/artifactspec/src/artifactspec/cli/commands/` exposes an `app = typer.Typer()`.
 Use `@app.command()` for one or more commands, and `app.add_typer()` for nested
-command groups. `cli.py` discovers modules in sorted order and registers each
+command groups. `cli/_app.py` discovers modules in sorted order and registers each
 app directly; adding commands requires no change to the entry point. Unnamed
 module apps contribute their commands at the root (so existing commands such
 as `artifactspec validate FILE` stay unchanged). A named module app, for example
@@ -64,8 +64,8 @@ and documentation for new commands.
 
 This is for trusted, built-in code: discovery **imports and executes** the
 command modules. It is separate from installed plugin discovery, which continues
-to read static metadata without importing plugins. Adding third-party CLI
-commands through this mechanism is not supported or sandboxed.
+to inspect plugin declarations after importing installed plugins. Adding
+third-party CLI commands through this mechanism is not supported or sandboxed.
 
 ## Checks
 

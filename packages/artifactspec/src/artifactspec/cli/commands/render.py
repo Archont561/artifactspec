@@ -8,10 +8,11 @@ from typing import Annotated
 
 import typer
 
+from artifactspec.cli.commands._plugins import load_cli_registry
 from artifactspec.core.pipeline import PipelineError
 from artifactspec.core.rendering import render
 from artifactspec.core.validation import Diagnostic
-from artifactspec.plugins import RegistrationError, Registry
+from artifactspec.plugins import RegistrationError
 
 app = typer.Typer()
 
@@ -106,13 +107,10 @@ def render_command(
     ] = None,
 ) -> None:
     """Validate and render with installed plugins or explicitly selected plugins."""
-    registry = Registry()
     try:
-        if no_plugin_autoload:
-            for plugin_id in plugin or []:
-                registry.load_installed(plugin_id)
-        else:
-            registry.load_all_installed(required=plugin or ())
+        registry = load_cli_registry(
+            autoload=not no_plugin_autoload, selected=tuple(plugin or ())
+        )
         text = path.read_text(encoding="utf-8")
         result = render(
             text,

@@ -21,3 +21,44 @@ import pytest
 )
 def test_organized_modules_are_importable(module):
     assert importlib.import_module(module) is not None
+
+
+def test_commands_live_under_cli_and_preserve_public_exports():
+    from artifactspec.cli import app, create_app
+    from artifactspec.cli.commands import capabilities, lsp, render, validate
+    from artifactspec.plugin import Plugin
+    from artifactspec.plugins import Plugin as RegistryPlugin
+    from artifactspec.testing import FakePhraseContext
+    from artifactspec.testing.contexts import FakePhraseContext as ImplementationContext
+
+    assert app is not None and callable(create_app)
+    assert all(
+        module.app is not None for module in (capabilities, lsp, render, validate)
+    )
+    assert Plugin is RegistryPlugin
+    assert FakePhraseContext is ImplementationContext
+
+
+def test_package_initializers_only_reexport_or_declare_all():
+    import ast
+    from pathlib import Path
+
+    packages = Path(__file__).resolve().parents[2]
+    initializers = sorted(packages.glob("*/src/**/__init__.py"))
+    assert initializers
+    for path in initializers:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            allowed = (
+                isinstance(node, (ast.Import, ast.ImportFrom))
+                or isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+                or isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "__all__"
+            )
+            assert allowed, (
+                f"{path}: implementation in initializer on line {node.lineno}"
+            )

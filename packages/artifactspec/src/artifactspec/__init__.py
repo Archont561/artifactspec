@@ -1,7 +1,5 @@
-"""ArtifactSpec package version."""
+"""Public artifactspec package namespace."""
 
-from importlib.metadata import version as _version
-
-VERSION = _version("artifactspec")
+from artifactspec._version import VERSION
 
 __all__ = ["VERSION"]

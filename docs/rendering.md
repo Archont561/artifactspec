@@ -47,10 +47,10 @@ artifactspec render scene.art --no-plugin-autoload \
 ```
 
 With autoload disabled, no installed plugin executes unless explicitly named.
-Static discovery, validation, and the language server read installed manifests
-without importing plugin handlers. Runtime loading checks the
-plugin declaration against its manifest, but this happens after import-time
-side effects. Manifest metadata does not establish that a plugin is safe.
+Discovery, validation, and the language server also import installed plugin
+modules by default; they do not execute contribution handlers. Use the same
+selection options to restrict which plugins they import. Plugin metadata does not
+establish that a plugin is safe.
 
 By default, the command prints a version 1 JSON success result, while
 diagnostics and operational errors go to stderr. Add `--format json` for

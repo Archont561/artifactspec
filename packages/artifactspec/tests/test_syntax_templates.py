@@ -5,6 +5,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from artifactspec.core.templates import TemplateError, compile_template
+from artifactspec.plugin import Phrase, Property
 
 
 @given(st.from_regex(r"[A-Za-z][A-Za-z0-9_-]{0,30}", fullmatch=True))
@@ -39,20 +40,19 @@ def test_plugin_decorators_declare_templates_without_executing_handlers():
 
     plugin = Plugin(
         "label",
-        "1",
-        outputs=("image",),
-        schema_version=3,
-        output_syntax={"image": "Make an image."},
+        outputs={"image": "Make an image."},
+        phrases=(Phrase("label", "label", "Draw {name}."),),
+        properties=(
+            Property("content", ("label",), "Write {value} onto {reference}."),
+        ),
     )
     called = []
 
-    @plugin.phrase("label", object_type="label", syntax="Draw {name}.")
+    @plugin.phrase("label")
     def label(context):
         called.append(context)
 
-    @plugin.property(
-        "content", target_types=("label",), syntax="Write {value} onto {reference}."
-    )
+    @plugin.property("content")
     def content(context):
         called.append(context)
 
@@ -113,7 +113,7 @@ def test_legacy_manifest_versions_require_migration(version):
         "representations": [],
         "renderers": [],
     }
-    with pytest.raises(RegistrationError, match="migrate to schema version 3"):
+    with pytest.raises(RegistrationError, match="migrate to typed Plugin declarations"):
         validate_manifest(legacy)
 
 
@@ -137,7 +137,7 @@ def test_second_output_declaration_is_rejected_even_if_it_names_another_output()
     assert result.diagnostics[0].code == "ambiguous_output"
 
 
-def test_installed_template_metadata_validates_without_importing_plugin(
+def test_installed_template_metadata_validates_after_import(
     monkeypatch, installed_plugin_factory
 ):
     from artifactspec.core.validation import validate
@@ -162,11 +162,11 @@ def test_installed_template_metadata_validates_without_importing_plugin(
         "representations": [],
         "renderers": [],
     }
-    fixture = installed_plugin_factory(
-        manifest=manifest, module_source="raise RuntimeError('must not import')\n"
-    )
+    fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     entries = installed_plugins(only={"example"})
-    result = validate("Image.\nSquare one.", ManifestCatalog([entries["example"][1]]))
+    result = validate(
+        "Image.\nSquare one.", ManifestCatalog([entries["example"].to_dict()])
+    )
     assert result.valid, result.diagnostics
-    assert not fixture["marker"].exists()
+    assert fixture["marker"].exists()

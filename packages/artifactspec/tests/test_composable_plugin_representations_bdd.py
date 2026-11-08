@@ -5,6 +5,7 @@ from pytest_bdd import given, scenarios, then, when
 
 from artifactspec.core.models import Content, ContentNode
 from artifactspec.core.rendering import compose
+from artifactspec.plugin import Representation
 from artifactspec.plugins import Plugin, Registry
 
 scenarios(
@@ -25,26 +26,22 @@ def state():
 def register_plugins(state):
     shapes = Plugin(
         "shapes",
-        "1",
-        outputs=("image",),
-        schema_version=3,
-        output_syntax={"image": "Image."},
+        outputs={"image": "Image."},
+        representations=(Representation("diagram", ("shape",)),),
     )
     events = Plugin(
         "events",
-        "1",
-        outputs=("image",),
-        schema_version=3,
-        output_syntax={"image": "Image."},
+        outputs={"image": "Image."},
+        representations=(Representation("diagram", ("event",)),),
     )
 
-    @shapes.representation("diagram", target_types=("shape",))
+    @shapes.representation("diagram")
     def shape(context):
         context.rectangle(
             context.node.name, x=0, y=context.index * 40, width=10, height=10
         )
 
-    @events.representation("diagram", target_types=("event",))
+    @events.representation("diagram")
     def event(context):
         context.text(context.node.name, "event", x=0, y=context.index * 40)
 
@@ -80,12 +77,10 @@ def test_overlapping_representation_target_types_are_rejected():
     for index in range(2):
         plugin = Plugin(
             f"p{index}",
-            "1",
-            outputs=("image",),
-            schema_version=3,
-            output_syntax={"image": "Image."},
+            outputs={"image": "Image."},
+            representations=(Representation("diagram", ("same",)),),
         )
-        plugin.representation("diagram", target_types=("same",))(lambda context: None)
+        plugin.representation("diagram")(lambda context: None)
         if index == 0:
             registry.register(plugin)
         else:
@@ -98,12 +93,10 @@ def test_unknown_representation_target_type_fails():
 
     plugin = Plugin(
         "shapes",
-        "1",
-        outputs=("image",),
-        schema_version=3,
-        output_syntax={"image": "Image."},
+        outputs={"image": "Image."},
+        representations=(Representation("diagram", ("shape",)),),
     )
-    plugin.representation("diagram", target_types=("shape",))(lambda context: None)
+    plugin.representation("diagram")(lambda context: None)
     registry = Registry()
     registry.register(plugin)
     content = Content((ContentNode("unknown", "unregistered", (), ()),))

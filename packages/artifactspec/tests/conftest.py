@@ -1,5 +1,4 @@
 import csv
-import json
 import sys
 
 import pytest
@@ -19,11 +18,6 @@ def installed_plugin_factory(tmp_path):
         package = path / module
         package.mkdir(parents=True, exist_ok=True)
         marker = tmp_path / "executed"
-        source = (
-            module_source
-            or f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
-        )
-        (package / "__init__.py").write_text(source, encoding="utf-8")
         manifest = manifest or {
             "schema_version": 3,
             "id": plugin_id,
@@ -42,9 +36,34 @@ def installed_plugin_factory(tmp_path):
             "representations": [],
             "renderers": [],
         }
-        manifest_path = package / "artifactspec_plugins" / f"{plugin_id}.json"
-        manifest_path.parent.mkdir(exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        if module_source is None:
+            declarations = {
+                "phrases": ("Phrase", ("name", "object_type", "syntax", "outputs")),
+                "properties": (
+                    "Property",
+                    ("name", "target_types", "syntax", "outputs"),
+                ),
+                "representations": (
+                    "Representation",
+                    ("name", "target_types", "outputs"),
+                ),
+                "renderers": ("Renderer", ("name", "outputs")),
+            }
+            arguments = []
+            for kind, (cls, fields) in declarations.items():
+                values = [
+                    f"{cls}({', '.join(repr(item[field]) for field in fields)})"
+                    for item in manifest[kind]
+                ]
+                arguments.append(f"{kind}=[{', '.join(values)}]")
+            source = (
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
+                "from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer\n"
+                f"plugin = Plugin({manifest['id']!r}, outputs={manifest['output_syntax']!r}, {', '.join(arguments)})\n"
+            )
+        else:
+            source = module_source
+        (package / "__init__.py").write_text(source, encoding="utf-8")
         info = path / f"{module}-1.0.dist-info"
         info.mkdir(exist_ok=True)
         (info / "METADATA").write_text(
@@ -58,7 +77,6 @@ def installed_plugin_factory(tmp_path):
                 [
                     [p.relative_to(path).as_posix(), "", ""]
                     for p in [
-                        manifest_path,
                         package / "__init__.py",
                         info / "entry_points.txt",
                         info / "METADATA",
@@ -69,7 +87,6 @@ def installed_plugin_factory(tmp_path):
             "path": path,
             "marker": marker,
             "manifest": manifest,
-            "manifest_path": manifest_path,
             "info": info,
         }
 

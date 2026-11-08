@@ -8,9 +8,9 @@ from typing import Annotated
 
 import typer
 
+from artifactspec.cli.commands._plugins import load_cli_registry
 from artifactspec.core.validation import validate
-from artifactspec.plugins import ManifestCatalog, RegistrationError
-from artifactspec.plugins.discovery import installed_plugins
+from artifactspec.plugins import RegistrationError
 
 app = typer.Typer()
 
@@ -26,12 +26,23 @@ def validate_file(
     format: Annotated[
         OutputFormat, typer.Option("--format", help="Diagnostic output format.")
     ] = OutputFormat.text,
+    no_plugin_autoload: Annotated[
+        bool,
+        typer.Option(
+            "--no-plugin-autoload", help="Only import explicitly selected plugins."
+        ),
+    ] = False,
+    plugin: Annotated[
+        list[str] | None,
+        typer.Option("--plugin", help="Select a plugin ID; repeat as needed."),
+    ] = None,
 ) -> None:
-    """Validate a specification using installed static plugin metadata."""
+    """Validate a specification using imported plugin declarations."""
     try:
         text = path.read_text(encoding="utf-8")
-        manifests = [item[1] for item in installed_plugins().values()]
-        catalog = ManifestCatalog(manifests)
+        catalog = load_cli_registry(
+            autoload=not no_plugin_autoload, selected=tuple(plugin or ())
+        )
         result = validate(text, catalog, source=str(path))
     except (OSError, UnicodeError, RegistrationError) as exc:
         typer.echo(f"artifactspec: {exc}", err=True)

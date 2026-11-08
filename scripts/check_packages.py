@@ -55,6 +55,11 @@ def _build_distributions(root: Path) -> list[Path]:
     wheels = sorted(outputs.glob("*.whl"))
     for wheel in wheels:
         with zipfile.ZipFile(wheel) as archive:
+            if any(
+                "/artifactspec_plugins/" in name and name.endswith(".json")
+                for name in archive.namelist()
+            ):
+                raise RuntimeError(f"Obsolete plugin JSON found in {wheel.name}")
             if not any(
                 name.endswith(".dist-info/licenses/LICENSE")
                 for name in archive.namelist()
@@ -209,6 +214,7 @@ def _check_api(python: Path) -> None:
         "-I",
         "-c",
         "from importlib.metadata import version; "
+        "from importlib.util import find_spec; "
         "import artifactspec, artifactspec_manim, artifactspec_svg, artifactspec_events; "
         "assert artifactspec.VERSION == version('artifactspec'); "
         "assert artifactspec_manim.VERSION == version('artifactspec-manim'); "
@@ -218,11 +224,19 @@ def _check_api(python: Path) -> None:
         "assert artifactspec_manim.__all__ == ['VERSION']; "
         "assert artifactspec_svg.__all__ == ['VERSION']; "
         "assert artifactspec_events.__all__ == ['VERSION']; "
+        "from artifactspec.cli.commands import capabilities, validate, lsp, render; "
+        "assert find_spec('artifactspec.commands') is None; "
+        "from artifactspec.cli import app, create_app; "
+        "from artifactspec.testing import FakePhraseContext; "
+        "from artifactspec.testing.contexts import FakePhraseContext as ContextImplementation; "
+        "assert FakePhraseContext is ContextImplementation; "
         "from artifactspec.core.parser import parse; "
-        "from artifactspec.plugins import Plugin, Registry; "
-        "plugin = Plugin('example', '1', outputs=('image',), output_syntax={'image': 'Output image.'}); "
-        "plugin.phrase('circle', object_type='circle', syntax='Create circle named {name}.')(lambda context: None); "
-        "plugin.property('label', target_types=('circle',), syntax='Set label of {reference} to {value}.')(lambda context: None); "
+        "from artifactspec.plugin import Plugin, Registry, Phrase, Property; "
+        "from artifactspec.plugins._registry import Plugin as PluginImplementation; "
+        "assert Plugin is PluginImplementation; "
+        "plugin = Plugin('example', outputs={'image': 'Output image.'}, phrases=(Phrase('circle', 'circle', 'Create circle named {name}.'),), properties=(Property('label', ('circle',), 'Set label of {reference} to {value}.'),)); "
+        "plugin.phrase('circle')(lambda context: None); "
+        "plugin.property('label')(lambda context: None); "
         "registry = Registry(); registry.register(plugin); "
         "document = parse('Output image.\\nCreate circle named sun.\\n"
         'Set label of sun to \\"hello\\".\', registry); '

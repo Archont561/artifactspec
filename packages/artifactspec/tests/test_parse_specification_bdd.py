@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import Plugin, Registry
 
 scenarios(
@@ -26,32 +27,27 @@ def state():
 def registered_capabilities(state):
     plugin = Plugin(
         "draw",
-        "1",
-        outputs=("image", "animation"),
-        output_syntax={"image": "Output image.", "animation": "Output animation."},
+        outputs={"image": "Output image.", "animation": "Output animation."},
+        phrases=(
+            Phrase("circle", "circle", "Create circle named {name}.", ("image",)),
+        ),
+        properties=(
+            Property("color", ("circle",), "Set color of {reference} to {value}."),
+            Property(
+                "label", ("circle",), "Set label of {reference} to {value}.", ("image",)
+            ),
+        ),
     )
 
-    @plugin.phrase(
-        "circle",
-        outputs=("image",),
-        object_type="circle",
-        syntax="Create circle named {name}.",
-    )
+    @plugin.phrase("circle")
     def circle(context):
         state["executions"].append(context)
 
-    @plugin.property(
-        "color", target_types=("circle",), syntax="Set color of {reference} to {value}."
-    )
+    @plugin.property("color")
     def color(context):
         state["executions"].append(context)
 
-    @plugin.property(
-        "label",
-        outputs=("image",),
-        target_types=("circle",),
-        syntax="Set label of {reference} to {value}.",
-    )
+    @plugin.property("label")
     def label(context):
         state["executions"].append(context)
 

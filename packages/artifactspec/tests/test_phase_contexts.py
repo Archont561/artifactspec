@@ -5,6 +5,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from artifactspec.core.pipeline import PipelineError, build_content
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import ManifestCatalog, Plugin, Registry
 from artifactspec.testing import FakePhraseContext, FakePropertyContext
 
@@ -13,14 +14,15 @@ pytest_plugins = ["artifactspec.testing.pytest_plugin"]
 
 def make_registry(phrase, property_handler):
     plugin = Plugin(
-        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "test",
+        outputs={"image": "Output image."},
+        phrases=(Phrase("text", "text", "Create text named {name}."),),
+        properties=(
+            Property("value", ("text",), "Set value of {reference} to {value}."),
+        ),
     )
-    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
-        phrase
-    )
-    plugin.property(
-        "value", target_types=("text",), syntax="Set value of {reference} to {value}."
-    )(property_handler)
+    plugin.phrase("text")(phrase)
+    plugin.property("value")(property_handler)
     registry = Registry()
     registry.register(plugin)
     return registry

@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, scenarios, then, when
 
+from artifactspec.plugin import Phrase, Property
+
 scenarios(
     str(Path(__file__).resolve().parents[1] / "features" / "phase_contexts.feature")
 )
@@ -20,18 +22,18 @@ def text_plugin(state):
 
     plugin = Plugin(
         "example",
-        "1",
-        outputs=("image", "report"),
-        output_syntax={"image": "Output image.", "report": "Output report."},
+        outputs={"image": "Output image.", "report": "Output report."},
+        phrases=(Phrase("text", "text", "Create text named {name}."),),
+        properties=(
+            Property("value", ("text",), "Set value of {reference} to {value}."),
+        ),
     )
 
-    @plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
+    @plugin.phrase("text")
     def make_text(ctx: PhraseContext):
         ctx.create("text")
 
-    @plugin.property(
-        "value", target_types=("text",), syntax="Set value of {reference} to {value}."
-    )
+    @plugin.property("value")
     def set_value(ctx: PropertyContext):
         ctx.set("value", ctx.value)
 

@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from artifactspec.cli import app
 from artifactspec.core.models import Composition, TextElement
 from artifactspec.core.syntax import Position, SourceSpan
+from artifactspec.plugin import Phrase, Representation
 
 
 @given(st.lists(st.booleans(), max_size=12))
@@ -184,13 +185,16 @@ def test_exact_synthetic_renderer_reports_no_limitations_without_claiming_fideli
         "renderers": [{"name": "exact-svg", "outputs": []}],
     }
     plugin = """from html import escape
-from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={"image": "Output image."})
-@plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
+from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
+plugin = Plugin("example", outputs={"image": "Output image."},
+    phrases=(Phrase("text", "text", "Create text named {name}."),),
+    properties=(Property("value", ("text",), "Set value of {reference} to {value}."),),
+    representations=(Representation("exact", ("text",)),), renderers=(Renderer("exact-svg"),))
+@plugin.phrase("text")
 def create(ctx): ctx.create("text")
-@plugin.property("value", target_types=("text",), syntax="Set value of {reference} to {value}.")
+@plugin.property("value")
 def assign(ctx): ctx.set("value", ctx.value)
-@plugin.representation("exact", target_types=("text",))
+@plugin.representation("exact")
 def layout(ctx):
     for node in ctx.content.nodes:
         ctx.text(node.name, dict(node.properties)["value"], x=20, y=40)
@@ -259,11 +263,13 @@ def test_failure_keeps_validation_warnings_and_phase_limitations(
         ],
         "renderers": [{"name": "broken", "outputs": []}],
     }
-    plugin = """from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={"image": "Output image."})
-@plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
+    plugin = """from artifactspec.plugin import Plugin, Phrase, Representation, Renderer
+plugin = Plugin("example", outputs={"image": "Output image."},
+    phrases=(Phrase("text", "text", "Create text named {name}."),),
+    representations=(Representation("layout", ("text",)),), renderers=(Renderer("broken"),))
+@plugin.phrase("text")
 def create(ctx): ctx.create("text")
-@plugin.representation("layout", target_types=("text",))
+@plugin.representation("layout")
 def layout(ctx):
     ctx.warn("layout limitation")
     ctx.text(ctx.content.nodes[0].name, "x", x=0, y=0)
@@ -390,10 +396,12 @@ def test_representation_failure_keeps_limitations_for_api_call():
     from artifactspec.plugins import Plugin, Registry
 
     plugin = Plugin(
-        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "test",
+        outputs={"image": "Output image."},
+        representations=(Representation("layout", ("text",)),),
     )
 
-    @plugin.representation("layout", target_types=("text",))
+    @plugin.representation("layout")
     def layout(context):
         context.warn("partial layout")
         raise ValueError("not supported")
@@ -425,11 +433,11 @@ def test_validation_failure_preserves_warnings_with_errors(tmp_path, monkeypatch
     from artifactspec.plugins import Plugin, Registry
 
     plugin = Plugin(
-        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "test",
+        outputs={"image": "Output image."},
+        phrases=(Phrase("text", "text", "Create text named {name}."),),
     )
-    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
-        lambda ctx: ctx.create("text")
-    )
+    plugin.phrase("text")(lambda ctx: ctx.create("text"))
     registry = Registry()
     registry.register(plugin)
     original = rendering.validate

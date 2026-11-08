@@ -137,16 +137,19 @@ def test_cli_loads_only_explicitly_approved_installed_plugin(
     marker = tmp_path / "executed"
     source_code = f"""from pathlib import Path
 Path({str(marker)!r}).write_text("loaded")
-from artifactspec.plugins import Plugin
+from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
 from html import escape
-plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={{"image": "Output image."}})
-@plugin.phrase("text", object_type="text", syntax="Create text named {{name}}.")
+plugin = Plugin("example", outputs={{"image": "Output image."}},
+    phrases=(Phrase("text", "text", "Create text named {{name}}."),),
+    properties=(Property("value", ("text",), "Set value of {{reference}} to {{value}}."),),
+    representations=(Representation("external", ("text",)),), renderers=(Renderer("external-svg"),))
+@plugin.phrase("text")
 def create(ctx):
     ctx.create("text")
-@plugin.property("value", target_types=("text",), syntax="Set value of {{reference}} to {{value}}.")
+@plugin.property("value")
 def apply(ctx):
     ctx.set("value", ctx.value)
-@plugin.representation("external", target_types=("text",))
+@plugin.representation("external")
 def layout(ctx):
     for node in ctx.content.nodes:
         ctx.text(node.name, dict(node.properties)["value"], x=5, y=20)
@@ -183,7 +186,7 @@ def render(ctx):
     assert "External" in destination.read_text(encoding="utf-8")
 
 
-def test_installed_capabilities_and_validation_use_static_metadata(tmp_path):
+def test_installed_capabilities_and_validation_use_plugin_objects(tmp_path):
     caps = CliRunner().invoke(app, ["capabilities", "--details", "--output", "image"])
     assert caps.exit_code == 0, caps.output
     assert any(item["id"] == "svg" for item in json.loads(caps.output)["plugins"])
@@ -198,20 +201,10 @@ def test_installed_capabilities_and_validation_use_static_metadata(tmp_path):
     assert CliRunner().invoke(app, ["capabilities", "--builtin-basic"]).exit_code != 0
 
 
-def test_legacy_plugin_is_rejected_without_executing_code(
+def test_non_plugin_entrypoint_is_rejected(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
-    manifest = {
-        "schema_version": 1,
-        "id": "example",
-        "version": "1.0",
-        "outputs": ["image"],
-        "phrases": [],
-        "properties": [],
-        "representations": [],
-        "renderers": [],
-    }
-    fixture = installed_plugin_factory(manifest=manifest)
+    fixture = installed_plugin_factory(module_source="plugin = object()\n")
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"
     source.write_text("Output image.", encoding="utf-8")
@@ -231,7 +224,4 @@ def test_legacy_plugin_is_rejected_without_executing_code(
         ],
     )
     assert result.exit_code == 2
-    assert (
-        "migrate to schema version 3" in json.loads(result.stdout)["error"]["message"]
-    )
-    assert not fixture["marker"].exists()
+    assert "Plugin object" in json.loads(result.stdout)["error"]["message"]

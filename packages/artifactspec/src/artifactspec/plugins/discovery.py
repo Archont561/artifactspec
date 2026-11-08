@@ -1,102 +1,109 @@
-"""Read installed plugin manifests without importing plugin code."""
+"""Discover installed plugins by importing their entry-point objects."""
 
 from __future__ import annotations
 
-import json
 import re
 from importlib import metadata
 from typing import Any
 
 from artifactspec.plugins import (
     KINDS,
+    Plugin,
     RegistrationError,
+    Registry,
     check_conflicts,
     filter_manifests,
-    validate_manifest,
 )
 
 
-def _manifest_for_entry(entry: metadata.EntryPoint) -> dict[str, Any]:
-    if not re.fullmatch(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*", entry.name):
-        raise RegistrationError(f"invalid plugin entry point id {entry.name!r}")
-    try:
-        module = entry.module
-    except (AssertionError, AttributeError, ValueError) as exc:
-        raise RegistrationError(
-            f"invalid entry point for plugin {entry.name!r}"
-        ) from exc
-    if (
-        not module
-        or not all(part.isidentifier() for part in module.split("."))
-        or not entry.attr
-    ):
-        raise RegistrationError(f"invalid entry point for plugin {entry.name!r}")
-    path = f"{module.split('.')[0]}/artifactspec_plugins/{entry.name}.json"
-    dist = entry.dist
-    if dist is None or dist.files is None:
-        raise RegistrationError(
-            f"installed file records missing for plugin {entry.name!r}"
-        )
-    matching = [file for file in dist.files if str(file) == path]
-    if len(matching) != 1:
-        raise RegistrationError(
-            f"manifest {path!r} missing or duplicated in installed files for plugin {entry.name!r}"
-        )
-    try:
-        data = json.loads(matching[0].read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise RegistrationError(
-            f"cannot read manifest {path!r} for plugin {entry.name!r}: {exc}"
-        ) from exc
-    try:
-        manifest = validate_manifest(data, expected_id=entry.name)
-    except RegistrationError as exc:
-        raise RegistrationError(
-            f"invalid manifest for plugin {entry.name!r}: {exc}"
-        ) from exc
-    return manifest
-
-
-def installed_plugins(
-    *, only: set[str] | None = None
-) -> dict[str, tuple[metadata.EntryPoint, dict[str, Any]]]:
-    """Return entry points and validated static metadata; never load them."""
-    found: list[tuple[metadata.EntryPoint, dict[str, Any]]] = []
+def installed_plugins(*, only: set[str] | None = None) -> dict[str, Plugin]:
+    """Import selected entry points and return their declared Plugin objects."""
     entries = sorted(
         metadata.entry_points(group="artifactspec.plugins"),
         key=lambda ep: (ep.name, ep.value),
     )
-    for entry in entries:
-        if only is not None and entry.name not in only:
-            continue
-        found.append((entry, _manifest_for_entry(entry)))
-    check_conflicts(manifest for _, manifest in found)
-    return {manifest["id"]: (entry, manifest) for entry, manifest in found}
+    selected = [entry for entry in entries if only is None or entry.name in only]
+    names: set[str] = set()
+    for entry in selected:
+        if not re.fullmatch(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*", entry.name):
+            raise RegistrationError(f"invalid plugin entry point id {entry.name!r}")
+        try:
+            module = entry.module
+            attr = entry.attr
+        except (AttributeError, AssertionError, ValueError) as exc:
+            raise RegistrationError(
+                f"invalid entry point for plugin {entry.name!r}"
+            ) from exc
+        if (
+            not module
+            or not all(part.isidentifier() for part in module.split("."))
+            or not attr
+        ):
+            raise RegistrationError(f"invalid entry point for plugin {entry.name!r}")
+        if entry.name in names:
+            raise RegistrationError(f"duplicate plugin id {entry.name!r}")
+        names.add(entry.name)
+    plugins = {}
+    for entry in selected:
+        try:
+            plugin = entry.load()
+        except Exception as exc:
+            raise RegistrationError(
+                f"failed to load plugin {entry.name!r}: {exc}"
+            ) from exc
+        if not isinstance(plugin, Plugin):
+            raise RegistrationError(
+                f"entry point {entry.name!r} must reference a Plugin object"
+            )
+        if plugin.to_dict()["id"] != entry.name:
+            raise RegistrationError(
+                f"plugin id {plugin.to_dict()['id']!r} does not match entry point {entry.name!r}"
+            )
+        dist = entry.dist
+        if dist is None or not dist.metadata["Name"] or not dist.version:
+            raise RegistrationError(
+                f"distribution metadata missing for plugin {entry.name!r}"
+            )
+        plugin._bind_distribution(dist.metadata["Name"], dist.version)
+        plugins[entry.name] = plugin
+    check_conflicts(plugin.to_dict() for plugin in plugins.values())
+    return plugins
 
 
-def capabilities(*, details: bool = False, output: str | None = None) -> dict[str, Any]:
-    """Return the versioned CLI discovery schema from static metadata."""
-    sources = [item[1] for item in installed_plugins().values()]
-    check_conflicts(sources)
+def capabilities(
+    *,
+    details: bool = False,
+    output: str | None = None,
+    only: set[str] | None = None,
+    plugins: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return CLI discovery metadata derived from imported plugin objects."""
+    sources = (
+        plugins
+        if plugins is not None
+        else [plugin.to_dict() for plugin in installed_plugins(only=only).values()]
+    )
     manifests = filter_manifests(sources, output)
-    plugins = []
-    for manifest in manifests:
-        plugins.append(
-            {
-                "id": manifest["id"],
-                "version": manifest["version"],
-                "outputs": manifest["outputs"],
-                "capabilities": {
-                    kind: (
-                        [
-                            {"name": entry["name"], "outputs": entry["outputs"]}
-                            for entry in manifest[kind]
-                        ]
-                        if details
-                        else len(manifest[kind])
-                    )
-                    for kind in KINDS
-                },
-            }
-        )
-    return {"schema_version": 1, "plugins": plugins}
+    if details:
+        return {"schema_version": 2, "plugins": manifests}
+    summaries = [
+        {
+            "id": item["id"],
+            "version": item["version"],
+            "outputs": item["outputs"],
+            "capabilities": {kind: len(item[kind]) for kind in KINDS},
+        }
+        for item in manifests
+    ]
+    return {"schema_version": 2, "plugins": summaries}
+
+
+def load_registry(*, autoload: bool = True, selected: tuple[str, ...] = ()) -> Registry:
+    """Load all installed plugins or only explicitly selected plugins."""
+    registry = Registry()
+    if autoload:
+        registry.load_all_installed(required=selected)
+    else:
+        for name in selected:
+            registry.load_installed(name)
+    return registry

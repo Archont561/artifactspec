@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, scenarios, then, when
 
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import Plugin, Registry
 
 scenarios(
@@ -20,17 +21,19 @@ def state():
 @given("typed circle and color capabilities")
 def typed_capabilities(state):
     plugin = Plugin(
-        "shapes", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "shapes",
+        outputs={"image": "Output image."},
+        phrases=(
+            Phrase("circle", "circle", "Create circle named {name}."),
+            Phrase("text", "text", "Create text named {name}."),
+        ),
+        properties=(
+            Property("color", ("circle",), "Set color of {reference} to {value}."),
+        ),
     )
-    plugin.phrase("circle", object_type="circle", syntax="Create circle named {name}.")(
-        lambda ctx: state["executed"].append(ctx)
-    )
-    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
-        lambda ctx: state["executed"].append(ctx)
-    )
-    plugin.property(
-        "color", target_types=("circle",), syntax="Set color of {reference} to {value}."
-    )(lambda ctx: state["executed"].append(ctx))
+    plugin.phrase("circle")(lambda ctx: state["executed"].append(ctx))
+    plugin.phrase("text")(lambda ctx: state["executed"].append(ctx))
+    plugin.property("color")(lambda ctx: state["executed"].append(ctx))
     state["registry"] = Registry()
     state["registry"].register(plugin)
 
@@ -93,4 +96,4 @@ def wrong_type_error(state):
 
 @then("the plugin must be migrated to the current schema")
 def legacy_migration(state):
-    assert "migrate to schema version 3" in state["error"]
+    assert "migrate to typed Plugin declarations" in state["error"]

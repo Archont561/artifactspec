@@ -14,12 +14,11 @@ def test_existing_commands_remain_available():
 
 @pytest.mark.parametrize("contents", ["", "app = 42\n", "def app(): pass\n"])
 def test_invalid_command_module_is_reported(tmp_path, monkeypatch, contents):
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     (tmp_path / "bad.py").write_text(contents, encoding="utf-8")
     monkeypatch.setattr(commands, "__path__", [str(tmp_path)])
-    monkeypatch.delitem(sys.modules, "artifactspec.commands.bad", raising=False)
+    monkeypatch.delitem(sys.modules, "artifactspec.cli.commands.bad", raising=False)
     with pytest.raises(TypeError, match="bad.*Typer"):
         create_app()
 
@@ -46,15 +45,14 @@ def test_invalid_command_module_is_reported(tmp_path, monkeypatch, contents):
     ],
 )
 def test_duplicate_command_names_are_rejected(tmp_path, monkeypatch, first, second):
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     for module, declaration in (("first", first), ("second", second)):
         (tmp_path / f"{module}.py").write_text(
             f"import typer\napp = typer.Typer()\n{declaration}\n", encoding="utf-8"
         )
         monkeypatch.delitem(
-            sys.modules, f"artifactspec.commands.{module}", raising=False
+            sys.modules, f"artifactspec.cli.commands.{module}", raising=False
         )
     monkeypatch.setattr(commands, "__path__", [str(tmp_path)])
     with pytest.raises(ValueError, match="Duplicate CLI command"):
@@ -62,8 +60,7 @@ def test_duplicate_command_names_are_rejected(tmp_path, monkeypatch, first, seco
 
 
 def test_private_helpers_and_subpackages_are_not_imported(tmp_path, monkeypatch):
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     (tmp_path / "_private.py").write_text(
         'raise RuntimeError("imported private helper")', encoding="utf-8"
@@ -77,14 +74,13 @@ def test_private_helpers_and_subpackages_are_not_imported(tmp_path, monkeypatch)
         "import typer\napp = typer.Typer()\n@app.command()\ndef useful(): pass\n",
         encoding="utf-8",
     )
-    monkeypatch.delitem(sys.modules, "artifactspec.commands.useful", raising=False)
+    monkeypatch.delitem(sys.modules, "artifactspec.cli.commands.useful", raising=False)
     monkeypatch.setattr(commands, "__path__", [str(tmp_path)])
     assert CliRunner().invoke(create_app(), ["useful"]).exit_code == 0
 
 
 def test_nested_groups_keep_callbacks_options_and_commands(tmp_path, monkeypatch):
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     (tmp_path / "tree.py").write_text(
         """import typer
@@ -106,7 +102,7 @@ def other():
         encoding="utf-8",
     )
     monkeypatch.setattr(commands, "__path__", [str(tmp_path)])
-    monkeypatch.delitem(sys.modules, "artifactspec.commands.tree", raising=False)
+    monkeypatch.delitem(sys.modules, "artifactspec.cli.commands.tree", raising=False)
     app = create_app()
     result = CliRunner().invoke(
         app, ["outer", "--prefix", "hello", "inner", "show", "value"]
@@ -119,8 +115,7 @@ def other():
 
 
 def test_module_app_can_supply_its_own_group_name_and_callback(tmp_path, monkeypatch):
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     (tmp_path / "named.py").write_text(
         """import typer
@@ -135,7 +130,7 @@ def scan():
         encoding="utf-8",
     )
     monkeypatch.setattr(commands, "__path__", [str(tmp_path)])
-    monkeypatch.delitem(sys.modules, "artifactspec.commands.named", raising=False)
+    monkeypatch.delitem(sys.modules, "artifactspec.cli.commands.named", raising=False)
     result = CliRunner().invoke(create_app(), ["tools", "scan"])
     assert result.exit_code == 0, result.output
     assert result.output == "starting tools\nscanning\n"
@@ -144,7 +139,7 @@ def scan():
 def test_nested_unnamed_groups_flatten_and_reject_collisions():
     import typer
 
-    from artifactspec.cli import _check_command_tree
+    from artifactspec.cli._app import _check_command_tree
 
     root = typer.Typer()
     named = typer.Typer()
@@ -162,7 +157,7 @@ def test_nested_unnamed_groups_flatten_and_reject_collisions():
 def test_same_command_name_is_allowed_in_distinct_groups():
     import typer
 
-    from artifactspec.cli import _check_command_tree
+    from artifactspec.cli._app import _check_command_tree
 
     root = typer.Typer()
     for group_name in ("first", "second"):
@@ -177,7 +172,7 @@ def test_same_command_name_is_allowed_in_distinct_groups():
 def test_unnamed_group_callback_is_rejected_instead_of_silently_dropped():
     import typer
 
-    from artifactspec.cli import _check_command_tree
+    from artifactspec.cli._app import _check_command_tree
 
     root = typer.Typer()
     group = typer.Typer()
@@ -190,7 +185,7 @@ def test_unnamed_group_callback_is_rejected_instead_of_silently_dropped():
 def test_cyclic_group_tree_is_rejected():
     import typer
 
-    from artifactspec.cli import _check_command_tree
+    from artifactspec.cli._app import _check_command_tree
 
     root = typer.Typer()
     child = typer.Typer()

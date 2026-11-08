@@ -6,28 +6,16 @@ import subprocess
 import sys
 
 
-def test_installed_wheel_manifest_is_discovered_without_importing(tmp_path):
+def test_installed_wheel_object_is_imported_with_distribution_version(tmp_path):
     project = tmp_path / "project"
     package = project / "wheel_plugin"
-    (package / "artifactspec_plugins").mkdir(parents=True)
+    package.mkdir(parents=True)
     marker = tmp_path / "executed"
     (package / "__init__.py").write_text(
-        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n",
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
+        "from artifactspec.plugin import Plugin, Renderer\n"
+        "plugin = Plugin('wheel-example', outputs={'svg': 'Output svg.'}, renderers=(Renderer('wheel-svg', ('svg',)),))\n",
         encoding="utf-8",
-    )
-    manifest = {
-        "schema_version": 3,
-        "id": "wheel-example",
-        "version": "2",
-        "outputs": ["svg"],
-        "output_syntax": {"svg": "Output svg."},
-        "phrases": [],
-        "properties": [],
-        "representations": [],
-        "renderers": [{"name": "wheel-svg", "outputs": ["svg"]}],
-    }
-    (package / "artifactspec_plugins" / "wheel-example.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
     )
     (project / "pyproject.toml").write_text(
         '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n'
@@ -70,5 +58,6 @@ def test_installed_wheel_manifest_is_discovered_without_importing(tmp_path):
         if item["id"] == "wheel-example"
     )
     assert plugin["id"] == "wheel-example"
-    assert plugin["capabilities"]["renderers"] == manifest["renderers"]
-    assert not marker.exists()
+    assert plugin["renderers"] == [{"name": "wheel-svg", "outputs": ["svg"]}]
+    assert plugin["version"] == "2"
+    assert marker.exists()

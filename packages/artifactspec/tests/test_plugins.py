@@ -6,6 +6,7 @@ from importlib import metadata
 
 import pytest
 
+from artifactspec.plugin import Phrase, Property, Renderer, Representation
 from artifactspec.plugins import Plugin, RegistrationError, Registry, validate_manifest
 from artifactspec.plugins.discovery import capabilities, installed_plugins
 
@@ -27,36 +28,37 @@ def manifest():
 def test_decorators_and_freezing():
     plugin = Plugin(
         "one",
-        "1",
-        outputs=("svg", "pdf"),
-        output_syntax={"svg": "Output svg.", "pdf": "Output pdf."},
+        outputs={"svg": "Output svg.", "pdf": "Output pdf."},
+        phrases=(
+            Phrase("one", "one", "Create {name}."),
+            Phrase("new", "new", "New {name}."),
+        ),
+        properties=(Property("one", ("one",), "Set {reference} {value}."),),
+        representations=(Representation("one", ("one",)),),
+        renderers=(Renderer("one"),),
     )
 
     def handler(context):
         return context
 
-    assert (
-        plugin.phrase("one", object_type="one", syntax="Create {name}.")(handler)
-        is handler
-    )
-    assert (
-        plugin.property(
-            "one", target_types=("one",), syntax="Set {reference} {value}."
-        )(handler)
-        is handler
-    )
-    assert plugin.representation("one", target_types=("one",))(handler) is handler
+    assert plugin.phrase("one")(handler) is handler
+    assert plugin.property("one")(handler) is handler
+    assert plugin.representation("one")(handler) is handler
     assert plugin.renderer("one")(handler) is handler
     registry = Registry()
     registry.register(plugin)
     actual = registry.manifests()[0]
     assert actual["outputs"] == ["pdf", "svg"]
-    assert actual["phrases"][0]["syntax"] == "Create {name}."
+    assert (
+        next(item for item in actual["phrases"] if item["name"] == "one")["syntax"]
+        == "Create {name}."
+    )
+    assert actual["version"] is None
     assert actual["properties"][0]["target_types"] == ["one"]
     assert actual["representations"][0]["target_types"] == ["one"]
     assert actual["renderers"] == [{"name": "one", "outputs": []}]
     with pytest.raises(RegistrationError, match="frozen"):
-        plugin.phrase("new", object_type="new", syntax="New {name}.")(lambda x: x)
+        plugin.phrase("new")(lambda x: x)
     result = registry.manifests()
     result[0]["outputs"].clear()
     assert registry.manifests()[0]["outputs"] == ["pdf", "svg"]
@@ -65,28 +67,29 @@ def test_decorators_and_freezing():
 
 def test_invalid_registration_is_atomic():
     registry = Registry()
-    first = Plugin("one", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
-    registry.register(first)
+    registry.register(Plugin("one", outputs={"svg": "Output svg."}))
     with pytest.raises(RegistrationError, match="duplicate plugin id"):
-        registry.register(Plugin("one", "2"))
+        registry.register(Plugin("one", outputs={}))
     with pytest.raises(RegistrationError, match="expected a Plugin"):
         registry.register(None)
     with pytest.raises(RegistrationError, match="unsupported outputs"):
         Plugin(
-            "two", "1", outputs=("svg",), output_syntax={"svg": "Output svg."}
-        ).renderer("bad", outputs=("pdf",))(lambda x: x)
-    plugin = Plugin("three", "1")
-    plugin.property(
-        "name", target_types=("thing",), syntax="Set name of {reference} to {value}."
-    )(lambda x: x)
+            "two",
+            outputs={"svg": "Output svg."},
+            renderers=(Renderer("bad", ("pdf",)),),
+        )
+    plugin = Plugin(
+        "three",
+        outputs={},
+        properties=(Property("name", ("thing",), "Set {reference} {value}."),),
+    )
+    plugin.property("name")(lambda x: x)
     with pytest.raises(RegistrationError, match="duplicate"):
-        plugin.property(
-            "name",
-            target_types=("thing",),
-            syntax="Set name of {reference} to {value}.",
-        )(lambda x: x)
+        plugin.property("name")(lambda x: x)
     with pytest.raises(RegistrationError, match="callable"):
-        plugin.phrase("other", object_type="other", syntax="Create other {name}.")(None)
+        plugin.property("name")(None)
+    with pytest.raises(RegistrationError, match="undeclared"):
+        plugin.phrase("unknown")(lambda x: x)
     assert [p["id"] for p in registry.manifests()] == ["one"]
 
 
@@ -145,96 +148,53 @@ def test_manifest_expected_id():
         validate_manifest([])
 
 
-def test_static_discovery_and_loading(installed_plugin_factory, monkeypatch):
-    source = """from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("svg", "pdf"), output_syntax={"svg": "Output svg.", "pdf": "Output pdf."})
-@plugin.phrase("draw", outputs=("svg",), object_type="draw", syntax="Draw {name}.")
-def draw(context):
-    return context
-"""
-    fixture = installed_plugin_factory(module_source=source)
+def test_object_discovery_and_loading(installed_plugin_factory, monkeypatch):
+    fixture = installed_plugin_factory()
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    assert "example" in installed_plugins()
+    found = installed_plugins(only={"example"})
+    assert fixture["marker"].exists()
+    assert found["example"].to_dict() == validate_manifest(fixture["manifest"])
+    assert capabilities(only={"example"})["plugins"][0]["capabilities"]["phrases"] == 1
     assert (
-        next(item for item in capabilities()["plugins"] if item["id"] == "example")[
-            "capabilities"
-        ]["phrases"]
-        == 1
-    )
-    assert (
-        capabilities(output="pdf", details=True)["plugins"][0]["capabilities"][
+        capabilities(output="pdf", details=True, only={"example"})["plugins"][0][
             "phrases"
         ]
         == []
     )
-    assert capabilities(output="gif")["plugins"] == []
     registry = Registry()
     registry.load_installed("example")
-    assert registry.manifests()[0] == validate_manifest(fixture["manifest"])
+    assert registry.plugin("example") is found["example"]
     with pytest.raises(RegistrationError, match="duplicate plugin"):
         registry.load_installed("example")
     with pytest.raises(RegistrationError, match="not found"):
         registry.load_installed("missing")
-    monkeypatch.delitem(sys.modules, "fixture_plugin", raising=False)
 
 
-def test_untrusted_discovery_and_failed_load(installed_plugin_factory, monkeypatch):
+def test_import_failures_are_reported(installed_plugin_factory, monkeypatch):
     fixture = installed_plugin_factory(
         module_source="raise RuntimeError('unsafe load')\n"
     )
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    assert "example" in installed_plugins()
+    with pytest.raises(RegistrationError, match="unsafe load"):
+        installed_plugins(only={"example"})
     with pytest.raises(RegistrationError, match="unsafe load"):
         Registry().load_installed("example")
 
 
-def test_manifest_runtime_mismatch(installed_plugin_factory, monkeypatch):
+def test_entry_id_must_match_plugin_id(installed_plugin_factory, monkeypatch):
     fixture = installed_plugin_factory(
-        module_source="from artifactspec.plugins import Plugin\nplugin = Plugin('example', 'different')\n"
+        module_source="from artifactspec.plugin import Plugin\nplugin = Plugin('different', outputs={})\n"
     )
     monkeypatch.syspath_prepend(str(fixture["path"]))
     with pytest.raises(RegistrationError, match="does not match"):
         Registry().load_installed("example")
-    monkeypatch.delitem(sys.modules, "fixture_plugin", raising=False)
 
 
-def test_broken_metadata_reports_error_without_loading(
-    installed_plugin_factory, monkeypatch
-):
-    fixture = installed_plugin_factory()
+def test_wrong_entrypoint_object_is_rejected(installed_plugin_factory, monkeypatch):
+    fixture = installed_plugin_factory(module_source="plugin = object()\n")
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    fixture["manifest_path"].write_text("not json", encoding="utf-8")
-    with pytest.raises(RegistrationError, match="cannot read manifest"):
-        installed_plugins()
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(fixture["path"]), env.get("PYTHONPATH", "")]
-    )
-    proc = subprocess.run(
-        [sys.executable, "-m", "artifactspec", "capabilities"],
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert proc.returncode == 1
-    assert not proc.stdout and "cannot read manifest" in proc.stderr
-    assert not fixture["marker"].exists()
-    fixture["manifest_path"].write_text(
-        json.dumps({"schema_version": 2}), encoding="utf-8"
-    )
-    with pytest.raises(RegistrationError, match="invalid manifest"):
-        installed_plugins()
-    fixture["manifest_path"].unlink()
-    # importlib.metadata changed whether RECORD entries for missing files are
-    # retained: both forms must fail with an actionable diagnostic.
-    with pytest.raises(
-        RegistrationError, match="missing or duplicated|cannot read manifest"
-    ):
-        installed_plugins()
-    (fixture["info"] / "RECORD").write_text("", encoding="utf-8")
-    with pytest.raises(RegistrationError, match="file records"):
-        installed_plugins()
+    with pytest.raises(RegistrationError, match="Plugin object"):
+        installed_plugins(only={"example"})
 
 
 def test_duplicate_installed_ids(installed_plugin_factory, monkeypatch):
@@ -246,7 +206,7 @@ def test_duplicate_installed_ids(installed_plugin_factory, monkeypatch):
     assert not first["marker"].exists() and not second["marker"].exists()
 
 
-def test_invalid_entry_and_missing_file_records(monkeypatch):
+def test_invalid_entrypoints(monkeypatch):
     entry = metadata.EntryPoint(
         name="Bad/id", value="pkg:plugin", group="artifactspec.plugins"
     )
@@ -259,17 +219,18 @@ def test_invalid_entry_and_missing_file_records(monkeypatch):
     monkeypatch.setattr(metadata, "entry_points", lambda **kwargs: [entry])
     with pytest.raises(RegistrationError, match="invalid entry point"):
         installed_plugins()
-    entry = metadata.EntryPoint(
-        name="ok", value="pkg:plugin", group="artifactspec.plugins"
-    )
-    monkeypatch.setattr(metadata, "entry_points", lambda **kwargs: [entry])
-    with pytest.raises(RegistrationError, match="file records"):
-        installed_plugins()
 
 
 def test_registration_conflicts_are_output_independent():
-    a = Plugin("a", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
-    b = Plugin("b", "1", outputs=("pdf",), output_syntax={"pdf": "Output pdf."})
+    a = Plugin("a", outputs={"svg": "Output svg."}, renderers=(Renderer("render"),))
+    b = Plugin(
+        "b",
+        outputs={"pdf": "Output pdf."},
+        renderers=(
+            Renderer("render"),
+            Renderer("still mutable"),
+        ),
+    )
     a.renderer("render")(lambda x: x)
     b.renderer("render")(lambda x: x)
     registry = Registry()
@@ -285,17 +246,11 @@ def test_registration_conflicts_are_output_independent():
 def test_handlers_respect_output_and_filter_narrows_contribution():
     plugin = Plugin(
         "draw",
-        "1",
-        outputs=("svg", "pdf"),
-        output_syntax={"svg": "Output svg.", "pdf": "Output pdf."},
+        outputs={"svg": "Output svg.", "pdf": "Output pdf."},
+        phrases=(Phrase("circle", "circle", "Create circle {name}.", ("svg", "pdf")),),
     )
 
-    @plugin.phrase(
-        "circle",
-        outputs=("svg", "pdf"),
-        object_type="circle",
-        syntax="Create circle {name}.",
-    )
+    @plugin.phrase("circle")
     def draw(context):
         return context
 
@@ -317,15 +272,16 @@ def test_handlers_respect_output_and_filter_narrows_contribution():
 
 
 def test_output_arguments_reject_strings():
-    with pytest.raises(RegistrationError, match="not a string"):
-        Plugin("a", "1", outputs="svg")
-    plugin = Plugin("a", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
-    with pytest.raises(RegistrationError, match="not a string"):
-        plugin.phrase("a", outputs="svg", object_type="a", syntax="Create a {name}.")(
-            lambda x: x
+    with pytest.raises(RegistrationError, match="map"):
+        Plugin("a", outputs="svg")
+    with pytest.raises(RegistrationError, match="list"):
+        Plugin(
+            "a",
+            outputs={"svg": "Output svg."},
+            phrases=(Phrase("a", "a", "Create {name}.", "svg"),),
         )
-    with pytest.raises(RegistrationError, match="iterable"):
-        Plugin("a", "1", outputs=None)
+    with pytest.raises(RegistrationError, match="map"):
+        Plugin("a", outputs=None)
 
 
 def test_installed_contribution_conflicts_are_deterministic(
@@ -336,7 +292,7 @@ def test_installed_contribution_conflicts_are_deterministic(
     monkeypatch.syspath_prepend(str(first["path"]))
     with pytest.raises(RegistrationError, match="phrases.*draw.*another.*example"):
         installed_plugins()
-    assert not first["marker"].exists()
+    assert first["marker"].exists()
 
 
 def test_cli_summary_and_unknown_output(installed_plugin_factory):
@@ -373,5 +329,91 @@ def test_cli_summary_and_unknown_output(installed_plugin_factory):
         capture_output=True,
         check=True,
     )
-    assert json.loads(filtered.stdout) == {"schema_version": 1, "plugins": []}
-    assert not fixture["marker"].exists()
+    assert json.loads(filtered.stdout) == {"schema_version": 2, "plugins": []}
+    assert fixture["marker"].exists()
+
+
+def test_declarations_serialize_independently_and_missing_handlers_fail_cleanly():
+    plugin = Plugin(
+        id="standalone",
+        outputs={"image": "Image."},
+        phrases=[Phrase("shape", "shape", "Draw {name}.")],
+        representations=[Representation("diagram", ("shape",))],
+    )
+    assert plugin.to_dict()["version"] is None
+    data = plugin.to_dict()
+    data["phrases"][0]["syntax"] = "changed"
+    assert plugin.to_dict()["phrases"][0]["syntax"] == "Draw {name}."
+    registry = Registry()
+    registry.register(plugin)
+    with pytest.raises(RegistrationError, match="no handler registered"):
+        registry.handler("phrases", "shape", output="image")
+    with pytest.raises(RegistrationError, match="no handler registered"):
+        registry.representation_handler("diagram", "shape", output="image")
+
+
+def test_cli_import_prints_cannot_corrupt_json(installed_plugin_factory, monkeypatch):
+    from typer.testing import CliRunner
+
+    from artifactspec.cli import app
+
+    fixture = installed_plugin_factory(
+        module_source="from artifactspec.plugin import Plugin\nprint('import noise')\nplugin = Plugin('example', outputs={})\n"
+    )
+    monkeypatch.syspath_prepend(str(fixture["path"]))
+    result = CliRunner().invoke(
+        app,
+        ["capabilities", "--no-plugin-autoload", "--plugin", "example", "--details"],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["plugins"][0]["id"] == "example"
+    assert "import noise" in result.stderr
+
+
+def test_capabilities_selection_skips_unselected_broken_plugin(
+    installed_plugin_factory, monkeypatch
+):
+    from typer.testing import CliRunner
+
+    from artifactspec.cli import app
+
+    fixture = installed_plugin_factory(module_source="raise RuntimeError('broken')\n")
+    monkeypatch.syspath_prepend(str(fixture["path"]))
+    runner = CliRunner()
+    failed = runner.invoke(app, ["capabilities"])
+    assert failed.exit_code == 1 and "broken" in failed.stderr
+    selected = runner.invoke(
+        app, ["capabilities", "--no-plugin-autoload", "--plugin", "svg"]
+    )
+    assert selected.exit_code == 0
+    assert [item["id"] for item in json.loads(selected.stdout)["plugins"]] == ["svg"]
+
+
+def test_distribution_identity_binding_is_consistent_and_atomic():
+    plugin = Plugin("direct", outputs={})
+    with pytest.raises(RegistrationError, match="version"):
+        plugin._bind_distribution("first", "")
+    assert plugin.to_dict()["version"] is None
+    plugin._bind_distribution("first", "1.5")
+    plugin._bind_distribution("first", "1.5")
+    with pytest.raises(RegistrationError, match="multiple distributions"):
+        plugin._bind_distribution("second", "2")
+    assert plugin.to_dict()["version"] == "1.5"
+
+
+def test_entrypoint_without_distribution_metadata_fails(monkeypatch):
+    from types import SimpleNamespace
+
+    plugin = Plugin("orphan", outputs={})
+    entry = SimpleNamespace(
+        name="orphan",
+        value="orphan:plugin",
+        module="orphan",
+        attr="plugin",
+        dist=None,
+        load=lambda: plugin,
+    )
+    monkeypatch.setattr(metadata, "entry_points", lambda **kwargs: [entry])
+    with pytest.raises(RegistrationError, match="distribution metadata missing"):
+        installed_plugins()
+    assert plugin.to_dict()["version"] is None

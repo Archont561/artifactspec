@@ -1,6 +1,5 @@
-"""Dated event capabilities for ArtifactSpec."""
+"""Public artifactspec-events package namespace."""
 
-from importlib.metadata import version
+from artifactspec_events._version import VERSION
 
-VERSION = version("artifactspec-events")
 __all__ = ["VERSION"]

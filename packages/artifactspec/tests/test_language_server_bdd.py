@@ -68,8 +68,8 @@ def state():
         state["client"].stop()
 
 
-@given("an editor connected to the language server with typed static capabilities")
-@given("an editor using incremental changes with typed static capabilities")
+@given("an editor connected to the language server with typed plugin capabilities")
+@given("an editor using incremental changes with typed plugin capabilities")
 def connected(state, installed_plugin_factory):
     fixture = installed_plugin_factory(
         manifest={
@@ -138,7 +138,7 @@ def invalid_diagnostic(state):
         "start": {"line": 1, "character": 13},
         "end": {"line": 1, "character": 20},
     }
-    assert not state["marker"].exists()
+    assert state["marker"].exists()
 
 
 @when("the editor fixes the specification")
@@ -225,7 +225,7 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
     assert server_diagnostic["message"] == result.diagnostics[0].message
     client.send("textDocument/didClose", {"textDocument": {"uri": uri}})
     assert client.receive()["params"]["diagnostics"] == []
-    assert not state["marker"].exists()
+    assert state["marker"].exists()
 
 
 def test_empty_document_publishes_missing_output(state, installed_plugin_factory):
@@ -258,17 +258,18 @@ def test_server_shutdown_and_rejects_invalid_metadata(state, installed_plugin_fa
     assert state["client"].process.wait(timeout=10) == 0
 
 
-def test_cli_lsp_reports_invalid_static_metadata(installed_plugin_factory, monkeypatch):
+def test_cli_lsp_reports_plugin_import_failure(installed_plugin_factory, monkeypatch):
     from typer.testing import CliRunner
 
     from artifactspec.cli import app
 
-    fixture = installed_plugin_factory()
-    fixture["manifest_path"].write_text("invalid json", encoding="utf-8")
+    fixture = installed_plugin_factory(
+        module_source="raise RuntimeError('import failed')\n"
+    )
     monkeypatch.syspath_prepend(str(fixture["path"]))
     result = CliRunner().invoke(app, ["lsp"])
     assert result.exit_code == 2
-    assert "cannot read manifest" in result.stderr
+    assert "import failed" in result.stderr
     assert not fixture["marker"].exists()
 
 
@@ -432,3 +433,21 @@ def test_lsp_can_validate_installed_svg_capabilities(state):
         },
     )
     assert client.receive()["params"]["diagnostics"] == []
+
+
+def test_plugin_import_stdout_does_not_corrupt_lsp(installed_plugin_factory):
+    fixture = installed_plugin_factory(
+        module_source="from artifactspec.plugin import Plugin\nprint('plugin startup')\nplugin = Plugin('example', outputs={})\n"
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(fixture["path"]), env.get("PYTHONPATH", "")]
+    )
+    client = Client(env, ("--no-plugin-autoload", "--plugin", "example"))
+    try:
+        client.send(
+            "initialize", {"processId": None, "rootUri": None, "capabilities": {}}, id=1
+        )
+        assert client.receive()["id"] == 1
+    finally:
+        client.stop()

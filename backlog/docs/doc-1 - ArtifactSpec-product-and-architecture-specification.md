@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 18:26'
+updated_date: '2026-11-08 21:20'
 tags:
   - specification
   - architecture
@@ -46,9 +46,9 @@ Representation choice, backend limitations, and fallback behavior should be expl
 
 The language should be concise, controlled natural language: primarily declarative sentences with predictable, registered patterns. Plugins may contribute nouns, verbs, phrases, and output-specific commands. Avoid making users write verbose programming-like calls, `custom(...)` expressions, or deeply nested object structures as the primary authoring model.
 
-Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. The first subset resolves `it` as the most recently created object in the same document. Named references and declared object and property types are checked; missing type metadata produces a warning. See `docs/language.md`.
+Parsing produces typed intermediate representation rather than arbitrary executable instructions. Validation should reject unknown phrases, unsupported capabilities, invalid references and types, and unresolved ambiguity rather than silently guessing. The first subset resolves `it` as the most recently created object in the same document. Named references and declared object and property types are checked; declarations must provide type metadata. See `docs/language.md`.
 
-The authoring model may resemble Gherkin in readability, but is not required to be Gherkin syntax or compatible with Gherkin tooling. The initial `Output`, `Create`, and `Set` grammar is implemented as a source-linked parser; other proposed syntax is illustrative.
+The authoring model may resemble Gherkin in readability, but is not required to be Gherkin syntax or compatible with Gherkin tooling. Plugin-declared statement templates are implemented by a source-linked parser; example syntax is not core-owned.
 
 Semantic validation does **not** prove that content is factually correct or visually effective. Those concerns require separate checks and, where appropriate, human review.
 
@@ -66,7 +66,7 @@ The core should expose phase-specific context **protocols** to plugin functions 
 
 Provide an `artifactspec.testing` layer with fake contexts and helpers, and a pytest plugin with fixtures backed by those helpers. Test individual plugin behavior using fakes as well as end-to-end registration, parsing, validation, and rendering where applicable.
 
-Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Installed discovery reads static manifests without importing plugin code. Rendering automatically imports installed plugins by default, so installation authorizes runtime execution; users can disable autoload and select plugins explicitly. Runtime loading compares the declaration against its manifest. Broader acquisition and dependency policy remain future work. Rust through PyO3 is an option only for measured performance bottlenecks.
+Plugins are trusted executable Python, not sandboxed by typing protocols. An agent must not treat an unapproved plugin as safe merely because it conforms to an interface. Installed discovery imports plugin entry-point objects by default, so installation authorizes code execution for discovery, validation, LSP, and rendering; users can disable autoload and select plugins explicitly. Typed constructor declarations are the source of capability metadata and installed distribution metadata supplies plugin versions. Broader acquisition and dependency policy remain future work. Rust through PyO3 is an option only for measured performance bottlenecks.
 
 ## 6. Validation, diagnostics, and fidelity
 
@@ -84,7 +84,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 8. Packaging, repository, and quality
 
-- The intended `artifactspec` product combines framework and CLI; a renderer such as `artifactspec-manim` may eventually be separate. The core now provides plugin registration and static capability discovery; the Manim distribution remains a version-only placeholder (the initial scaffold boundary is described in decision-13).
+- The intended `artifactspec` product combines framework and CLI; a renderer such as `artifactspec-manim` may eventually be separate. The core now provides plugin registration and capability discovery; the Manim distribution remains a version-only placeholder (the initial scaffold boundary is described in decision-13).
 - Each package initializer explicitly exports only `VERSION`, sourced from installed distribution metadata generated from `pyproject.toml`. Package-local BDD tests check the fresh namespace, pyproject and installed metadata; the Manim package also checks its minimal source layout.
 - Product tests and Gherkin features belong to their owning package. Repository scripts live in root `scripts/`, with their tests and script-specific features in `scripts/tests/` (decision-12 supersedes the root-test prohibition in decision-7 for scripts). Keep `examples/` empty until the API is stable.
 - Maintain `pixi.toml` and `pixi-sandbox.toml`. The sandbox file is an initial policy, not evidence of operational sandbox automation.
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static manifest discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit representation and backend selection with atomic rendering. Static schema-v3 metadata declares each plugin's complete output, phrase and property statement templates. The optional artifactspec-svg plugin owns image text and rectangle syntax, diagram layout and SVG rendering. The independent artifactspec-events plugin owns dated-event syntax and image/report diagram layout; both plugins compose in a single image. Reports have no renderer. Calendar events retain domain dates and declaration order without playback scheduling. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation playback, grouped or approximate timelines, narration, timing synchronization, and skill installation are not implemented. Version 1 and 2 plugin manifests must migrate to version 3; there is no built-in content plugin or legacy grammar fallback.
+The core implements typed plugin object declarations, decorator-based handler registration, entry-point discovery, an output-aware parser, reference and declared-type validation, CLI and LSP diagnostics, public phase contexts and test fakes, immutable semantic content, and explicit representation and backend selection with atomic rendering. Each plugin object declares its complete output, phrase and property statement templates. The optional artifactspec-svg plugin owns image text and rectangle syntax, diagram layout and SVG rendering. The independent artifactspec-events plugin owns dated-event syntax and image/report diagram layout; both plugins compose in a single image. Reports have no renderer. Calendar events retain domain dates and declaration order without playback scheduling. See `docs/plugins.md`, `docs/language.md`, and `docs/rendering.md` for contracts and limitations. The Manim package remains a version-only scaffold; animation playback, grouped or approximate timelines, narration, timing synchronization, and skill installation are not implemented. Installed JSON plugin manifests are no longer used; there is no built-in content plugin or legacy grammar fallback.
 
 ## 10. Initial product acceptance goals
 

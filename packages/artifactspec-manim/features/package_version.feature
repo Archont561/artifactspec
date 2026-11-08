@@ -5,4 +5,4 @@ Feature: Manim package version discovery
     Then VERSION is its only public export
     And VERSION matches pyproject and installed distribution metadata
     And VERSION is read from distribution metadata
-    And the package has no other source files
+    And the package contains only version support files
