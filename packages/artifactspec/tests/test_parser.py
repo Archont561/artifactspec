@@ -4,6 +4,7 @@ import pytest
 
 from artifactspec.core.parser import ParseError, parse
 from artifactspec.core.syntax import CreateStatement, Position, SetStatement, SourceSpan
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import Plugin, RegistrationError, Registry
 
 
@@ -11,25 +12,28 @@ from artifactspec.plugins import Plugin, RegistrationError, Registry
 def registry():
     plugin = Plugin(
         "test",
-        "1",
-        outputs=("image", "animation"),
-        output_syntax={"image": "Output image.", "animation": "Output animation."},
+        outputs={"image": "Output image.", "animation": "Output animation."},
+        phrases=(
+            Phrase(
+                "rounded circle",
+                "circle",
+                "Create rounded circle named {name}.",
+                ("image",),
+            ),
+        ),
+        properties=(
+            Property(
+                "fill color",
+                ("circle",),
+                "Set fill color of {reference} to {value}.",
+                ("image",),
+            ),
+            Property("label", ("circle",), "Set label of {reference} to {value}."),
+        ),
     )
-    plugin.phrase(
-        "rounded circle",
-        outputs=("image",),
-        object_type="circle",
-        syntax="Create rounded circle named {name}.",
-    )(lambda ctx: None)
-    plugin.property(
-        "fill color",
-        outputs=("image",),
-        target_types=("circle",),
-        syntax="Set fill color of {reference} to {value}.",
-    )(lambda ctx: None)
-    plugin.property(
-        "label", target_types=("circle",), syntax="Set label of {reference} to {value}."
-    )(lambda ctx: None)
+    plugin.phrase("rounded circle")(lambda ctx: None)
+    plugin.property("fill color")(lambda ctx: None)
+    plugin.property("label")(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     return registry
@@ -110,13 +114,13 @@ def test_unknown_capabilities_never_invoke_handlers(registry):
 
 def test_duplicate_phrase_registrations_are_rejected_before_parsing(registry):
     other = Plugin(
-        "other", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "other",
+        outputs={"image": "Output image."},
+        phrases=(
+            Phrase("rounded circle", "circle", "Create rounded circle named {name}."),
+        ),
     )
-    other.phrase(
-        "rounded circle",
-        object_type="circle",
-        syntax="Create rounded circle named {name}.",
-    )(lambda ctx: None)
+    other.phrase("rounded circle")(lambda ctx: None)
     with pytest.raises(RegistrationError, match="conflicting"):
         registry.register(other)
 
@@ -140,18 +144,25 @@ def test_json_literal_may_contain_statement_delimiters(registry):
 
 def test_registered_names_cannot_smuggle_a_second_statement():
     plugin = Plugin(
-        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "test",
+        outputs={"image": "Output image."},
+        phrases=(
+            Phrase(
+                "circle named first. Create circle",
+                "circle",
+                "Create circle named {name}.",
+            ),
+        ),
+        properties=(
+            Property(
+                "label of first to x. Set label",
+                ("circle",),
+                "Set label of {reference} to {value}.",
+            ),
+        ),
     )
-    plugin.phrase(
-        "circle named first. Create circle",
-        object_type="circle",
-        syntax="Create circle named {name}.",
-    )(lambda ctx: None)
-    plugin.property(
-        "label of first to x. Set label",
-        target_types=("circle",),
-        syntax="Set label of {reference} to {value}.",
-    )(lambda ctx: None)
+    plugin.phrase("circle named first. Create circle")(lambda ctx: None)
+    plugin.property("label of first to x. Set label")(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     with pytest.raises(ParseError):
@@ -168,18 +179,25 @@ def test_registered_names_cannot_smuggle_a_second_statement():
 
 def test_registered_names_can_include_grammar_words():
     plugin = Plugin(
-        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "test",
+        outputs={"image": "Output image."},
+        phrases=(
+            Phrase(
+                "a circle named circle",
+                "circle",
+                "Create a circle named circle named {name}.",
+            ),
+        ),
+        properties=(
+            Property(
+                "label of apple to orange",
+                ("circle",),
+                "Set label of apple to orange of {reference} to {value}.",
+            ),
+        ),
     )
-    plugin.phrase(
-        "a circle named circle",
-        object_type="circle",
-        syntax="Create a circle named circle named {name}.",
-    )(lambda ctx: None)
-    plugin.property(
-        "label of apple to orange",
-        target_types=("circle",),
-        syntax="Set label of apple to orange of {reference} to {value}.",
-    )(lambda ctx: None)
+    plugin.phrase("a circle named circle")(lambda ctx: None)
+    plugin.property("label of apple to orange")(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     document = parse(
@@ -233,12 +251,7 @@ def test_literal_and_reference_spans_with_unicode_and_tabs(registry):
 
 
 def test_ambiguous_plugin_output_templates_are_rejected():
-    plugin = Plugin(
-        "a",
-        "1",
-        outputs=("image", "report"),
-        output_syntax={"image": "Choose.", "report": "Choose."},
-    )
+    plugin = Plugin("a", outputs={"image": "Choose.", "report": "Choose."})
     registry = Registry()
     registry.register(plugin)
     with pytest.raises(ParseError) as captured:

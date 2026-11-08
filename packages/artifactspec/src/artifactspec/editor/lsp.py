@@ -1,6 +1,8 @@
 """LSP diagnostics backed by the same validator as the CLI."""
 
+import sys
 from collections.abc import Sequence
+from contextlib import redirect_stdout
 from urllib.parse import unquote
 
 from lsprotocol import types
@@ -9,8 +11,8 @@ from pygls.workspace import ServerTextPosition, TextDocument
 
 from artifactspec.core._lines import source_lines
 from artifactspec.core.validation import Diagnostic, validate
-from artifactspec.plugins import CapabilityCatalog, ManifestCatalog
-from artifactspec.plugins.discovery import installed_plugins
+from artifactspec.plugins import CapabilityCatalog
+from artifactspec.plugins.discovery import load_registry
 
 
 class _LanguageDocument(TextDocument):
@@ -54,7 +56,7 @@ def _publish(server: LanguageServer, catalog: CapabilityCatalog, uri: str) -> No
 
 
 def create_server(catalog: CapabilityCatalog) -> LanguageServer:
-    """Create an LSP server which validates against static capability metadata."""
+    """Create an LSP server which validates against plugin capability metadata."""
     server = LanguageServer("artifactspec", "0.1.0")
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
@@ -86,8 +88,9 @@ def create_server(catalog: CapabilityCatalog) -> LanguageServer:
     return server
 
 
-def start() -> None:
+def start(*, autoload: bool = True, selected: tuple[str, ...] = ()) -> None:
     """Start the server over standard input and output."""
-    manifests = [item[1] for item in installed_plugins().values()]
-    catalog = ManifestCatalog(manifests)
+    # stdout carries LSP frames; import-time prints must not corrupt it.
+    with redirect_stdout(sys.stderr):
+        catalog = load_registry(autoload=autoload, selected=selected)
     create_server(catalog).start_io()

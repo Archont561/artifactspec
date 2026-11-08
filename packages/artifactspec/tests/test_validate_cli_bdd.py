@@ -109,6 +109,6 @@ def failure(state):
     assert all(d["span"]["source"] == str(state["file"]) for d in diagnostics)
 
 
-@then("the installed validation plugin is not executed")
+@then("the installed validation plugin is imported")
 def not_executed(state):
-    assert not state["marker"].exists()
+    assert state["marker"].exists()

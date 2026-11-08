@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, scenarios, then, when
 
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import Plugin, RegistrationError, Registry
 
 scenarios(
@@ -26,23 +27,16 @@ def state():
 def plugin_with_outputs(state):
     plugin = Plugin(
         "shapes",
-        "1.0",
-        outputs=("pdf", "svg"),
-        output_syntax={"pdf": "Output pdf.", "svg": "Output svg."},
+        outputs={"pdf": "Output pdf.", "svg": "Output svg."},
+        phrases=(Phrase("draw circle", "circle", "Draw circle {name}.", ("svg",)),),
+        properties=(Property("color", ("circle",), "Color {reference} {value}."),),
     )
 
-    @plugin.phrase(
-        "draw circle",
-        outputs=("svg",),
-        object_type="circle",
-        syntax="Draw circle {name}.",
-    )
+    @plugin.phrase("draw circle")
     def draw(context):
         return context
 
-    @plugin.property(
-        "color", target_types=("circle",), syntax="Color {reference} {value}."
-    )
+    @plugin.property("color")
     def color(context):
         return context
 
@@ -90,11 +84,11 @@ def capabilities_registered(state):
 def registry_with_phrase(state):
     registry = Registry()
     plugin = Plugin(
-        "first", "1", outputs=("svg",), output_syntax={"svg": "Output svg."}
+        "first",
+        outputs={"svg": "Output svg."},
+        phrases=(Phrase("same", "same", "Create same {name}."),),
     )
-    plugin.phrase("same", object_type="same", syntax="Create same {name}.")(
-        lambda context: context
-    )
+    plugin.phrase("same")(lambda context: context)
     registry.register(plugin)
     state["registry"] = registry
     state["before"] = registry.manifests()
@@ -103,11 +97,11 @@ def registry_with_phrase(state):
 @when("another plugin contributes the same phrase")
 def conflicting_plugin(state):
     plugin = Plugin(
-        "second", "1", outputs=("pdf",), output_syntax={"pdf": "Output pdf."}
+        "second",
+        outputs={"pdf": "Output pdf."},
+        phrases=(Phrase("same", "same", "Create same {name}."),),
     )
-    plugin.phrase("same", object_type="same", syntax="Create same {name}.")(
-        lambda context: context
-    )
+    plugin.phrase("same")(lambda context: context)
     with pytest.raises(RegistrationError, match="phrase.*same") as error:
         state["registry"].register(plugin)
     state["error"] = str(error.value)
@@ -119,7 +113,7 @@ def registration_atomic(state):
     assert state["registry"].manifests() == state["before"]
 
 
-@given("an installed plugin with a static manifest")
+@given("an installed plugin object")
 def installed_plugin(state, installed_plugin_factory):
     state.update(installed_plugin_factory())
 
@@ -169,31 +163,38 @@ def request_all(state):
 @then("the matching capabilities are returned as JSON")
 def matching_json(state):
     assert state["result"] == {
-        "schema_version": 1,
+        "schema_version": 2,
         "plugins": [
             {
                 "id": "example",
                 "version": "1.0",
                 "outputs": ["svg"],
-                "capabilities": {
-                    "phrases": [{"name": "draw", "outputs": ["svg"]}],
-                    "properties": [],
-                    "representations": [],
-                    "renderers": [],
-                },
+                "output_syntax": {"svg": "Output svg."},
+                "schema_version": 3,
+                "phrases": [
+                    {
+                        "name": "draw",
+                        "outputs": ["svg"],
+                        "object_type": "draw",
+                        "syntax": "Draw {name}.",
+                    }
+                ],
+                "properties": [],
+                "representations": [],
+                "renderers": [],
             }
         ],
     }
 
 
-@then("the installed plugin module has not been executed")
+@then("the installed plugin module has been imported")
 def module_not_executed(state):
-    assert not state["marker"].exists()
+    assert state["marker"].exists()
 
 
 @then("discovery returns an empty plugin list")
 def empty_plugins(state):
-    assert state["result"] == {"schema_version": 1, "plugins": []}
+    assert state["result"] == {"schema_version": 2, "plugins": []}
 
 
 @when("the Typer app is invoked with SVG capability details")

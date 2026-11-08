@@ -13,7 +13,7 @@ check_packages = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check_packages)
 
 
-def fake_builds(monkeypatch, *, with_license):
+def fake_builds(monkeypatch, *, with_license, with_plugin_json=False):
     calls = []
 
     def run(*args):
@@ -25,6 +25,8 @@ def fake_builds(monkeypatch, *, with_license):
         package = Path(args[args.index("build") + 1]).name.replace("-", "_")
         wheel = out / f"{package}-0.1.0-py3-none-any.whl"
         with zipfile.ZipFile(wheel, "w") as archive:
+            if with_plugin_json:
+                archive.writestr(f"{package}/artifactspec_plugins/obsolete.json", "{}")
             if with_license:
                 archive.writestr(f"{package}-0.1.0.dist-info/licenses/LICENSE", "MIT")
         (out / f"{package}-0.1.0.tar.gz").touch()
@@ -51,6 +53,8 @@ def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
             and "Set label of sun" in arg
             and "from artifactspec.core.validation import validate" in arg
             and "from artifactspec.editor.lsp import create_server" in arg
+            and "from artifactspec.cli.commands import capabilities" in arg
+            and "find_spec('artifactspec.commands') is None" in arg
             for arg in call
         )
         for call in calls
@@ -82,4 +86,10 @@ def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
 def test_check_packages_rejects_a_missing_wheel_license(monkeypatch):
     fake_builds(monkeypatch, with_license=False)
     with pytest.raises(RuntimeError, match="License missing"):
+        check_packages.main()
+
+
+def test_check_packages_rejects_obsolete_plugin_json(monkeypatch):
+    fake_builds(monkeypatch, with_license=True, with_plugin_json=True)
+    with pytest.raises(RuntimeError, match="Obsolete plugin JSON"):
         check_packages.main()

@@ -8,24 +8,25 @@ ArtifactSpec is an early-stage Python project for describing and producing visua
 artifacts with an agent-friendly language. The intended design separates semantic
 content, representations, composition, and rendering.
 
-**Current status:** the core provides plugin registration, static capability
-discovery, parsing, validation, editor diagnostics, and a rendering pipeline.
+**Current status:** the core provides plugin registration, plugin object discovery,
+parsing, validation, editor diagnostics, and a rendering pipeline.
 The optional `artifactspec-svg` distribution supplies image syntax and static SVG
 rendering; `artifactspec-events` independently supplies dated-event syntax and
-layouts. Both compose in one diagram. The Manim distribution remains a version-only placeholder. Package roots expose `VERSION`
-from distribution metadata.
+layouts. Both compose in one diagram. The Manim distribution remains a
+version-only placeholder. Package roots expose `VERSION` from distribution metadata.
 
 Run `artifactspec capabilities --details` to inspect installed plugin metadata
-without importing plugin code, or `artifactspec validate <file>` to validate a
-specification. `artifactspec lsp` starts the editor diagnostics server. Rendering
-automatically imports installed plugins, which execute arbitrary Python; install
-only trusted plugins or use `--no-plugin-autoload` to select them explicitly.
+or `artifactspec validate <file>` to validate a specification. `artifactspec lsp`
+starts the editor diagnostics server. All these commands, including rendering,
+import installed plugins, which execute arbitrary Python; install only trusted
+plugins or use `--no-plugin-autoload --plugin ID` to select them explicitly.
 See [plugin registration and discovery](docs/plugins.md), the
 [language contract](docs/language.md), and [rendering](docs/rendering.md).
 
-Python modules now live under `artifactspec.core`, `artifactspec.plugins`,
-`artifactspec.editor`, `artifactspec.testing`, and `artifactspec.cli`; old flat
-module imports are not retained. Update imports when upgrading.
+Python modules now live under `artifactspec.plugin`, `artifactspec.core`, `artifactspec.plugins`,
+`artifactspec.editor`, `artifactspec.testing`, and `artifactspec.cli`. Built-in
+command modules live under `artifactspec.cli.commands`; old flat module imports
+are not retained. Update imports when upgrading.
 
 ## Repository guide
 

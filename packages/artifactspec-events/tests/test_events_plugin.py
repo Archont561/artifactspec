@@ -16,7 +16,8 @@ def registry():
 
 
 def test_installed_metadata_matches_plugin():
-    assert installed_plugins(only={"events"})["events"][1] == plugin.manifest()
+    assert installed_plugins(only={"events"})["events"] is plugin
+    assert plugin.to_dict()["version"] == "0.1.0"
 
 
 def test_event_content_can_be_composed_without_svg():

@@ -1,8 +1,8 @@
 Feature: Autodiscover installed rendering plugins
-  Scenario: Inspect a plugin without importing its code
+  Scenario: Import a plugin to inspect its capabilities
     Given an installed rendering plugin with an import marker
     When I inspect installed capabilities
-    Then the plugin is listed without executing its code
+    Then the plugin is imported and listed
 
   Scenario: Render with an installed plugin automatically
     Given a rendering plugin installed in the environment

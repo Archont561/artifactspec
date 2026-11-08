@@ -70,7 +70,7 @@ with patch('importlib.metadata.version', return_value='9.8.7') as get_version:
     assert result.returncode == 0, result.stderr
 
 
-@then("the package has no other source files")
+@then("the package contains only version support files")
 def only_initializer_in_source():
     source = Path(__file__).resolve().parents[1] / "src" / "artifactspec_manim"
     files = [
@@ -78,4 +78,4 @@ def only_initializer_in_source():
         for p in source.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts
     ]
-    assert files == ["__init__.py"]
+    assert sorted(files) == ["__init__.py", "_version.py"]

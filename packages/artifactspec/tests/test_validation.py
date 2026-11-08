@@ -1,6 +1,7 @@
 import pytest
 
 from artifactspec.core.validation import validate
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import (
     ManifestCatalog,
     Plugin,
@@ -14,25 +15,20 @@ from artifactspec.plugins import (
 def typed_registry():
     plugin = Plugin(
         "typed",
-        "1",
-        outputs=("image", "animation"),
-        output_syntax={"image": "Output image.", "animation": "Output animation."},
+        outputs={"image": "Output image.", "animation": "Output animation."},
+        phrases=(
+            Phrase("circle", "circle", "Create circle named {name}.", ("image",)),
+            Phrase("text", "text", "Create text named {name}."),
+        ),
+        properties=(
+            Property(
+                "color", ("circle",), "Set color of {reference} to {value}.", ("image",)
+            ),
+        ),
     )
-    plugin.phrase(
-        "circle",
-        object_type="circle",
-        outputs=("image",),
-        syntax="Create circle named {name}.",
-    )(lambda ctx: pytest.fail("executed"))
-    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
-        lambda ctx: pytest.fail("executed")
-    )
-    plugin.property(
-        "color",
-        target_types=("circle",),
-        outputs=("image",),
-        syntax="Set color of {reference} to {value}.",
-    )(lambda ctx: pytest.fail("executed"))
+    plugin.phrase("circle")(lambda ctx: pytest.fail("executed"))
+    plugin.phrase("text")(lambda ctx: pytest.fail("executed"))
+    plugin.property("color")(lambda ctx: pytest.fail("executed"))
     registry = Registry()
     registry.register(plugin)
     return registry
@@ -105,14 +101,12 @@ def test_version_three_metadata_is_required_and_preserved(typed_registry):
     }
     with pytest.raises(RegistrationError):
         validate_manifest(broken)
-    with pytest.raises(RegistrationError):
-        Plugin("bad", "1", schema_version=2).phrase("x")(lambda ctx: None)
 
 
 @pytest.mark.parametrize("schema_version", [1, 2])
 def test_legacy_declarations_require_migration(schema_version):
-    with pytest.raises(RegistrationError, match="migrate to schema version 3"):
-        Plugin("old", "1", outputs=("image",), schema_version=schema_version)
+    with pytest.raises(RegistrationError, match="migrate to typed Plugin declarations"):
+        validate_manifest({"schema_version": schema_version})
 
 
 def test_catalog_rejects_conflicts_and_never_exposes_mutable_state(typed_registry):
@@ -127,24 +121,17 @@ def test_catalog_rejects_conflicts_and_never_exposes_mutable_state(typed_registr
     assert len(catalog.manifests()[0]["phrases"]) == 2
 
 
-def test_typed_plugin_and_manifest_require_matching_metadata():
-    def plugin():
-        return Plugin(
-            "typed", "1", outputs=("image",), output_syntax={"image": "Output image."}
-        )
-
-    with pytest.raises(RegistrationError, match="target_types"):
-        plugin().property("color", syntax="Set color of {reference} to {value}.")(
-            lambda ctx: None
-        )
-    with pytest.raises(RegistrationError, match="object_type"):
-        plugin().phrase("circle", syntax="Create circle named {name}.")(
-            lambda ctx: None
-        )
+def test_typed_declarations_require_complete_valid_metadata():
     with pytest.raises(RegistrationError, match="target types"):
-        plugin().property(
-            "color", target_types=(), syntax="Set color of {reference} to {value}."
-        )(lambda ctx: None)
+        Plugin(
+            "typed",
+            outputs={"image": "Output image."},
+            properties=(Property("color", (), "Set color of {reference} to {value}."),),
+        )
+    with pytest.raises(RegistrationError, match="phrases must contain"):
+        Plugin("typed", outputs={}, phrases=({"name": "circle"},))
+    with pytest.raises(RegistrationError, match="object type"):
+        Plugin("typed", outputs={}, phrases=(Phrase("circle", "", "Create {name}."),))
 
 
 def test_bad_syntax_returns_source_linked_error(typed_registry):
@@ -157,7 +144,7 @@ def test_bad_syntax_returns_source_linked_error(typed_registry):
     assert result.diagnostics[0].span.source == "bad.art"
 
 
-def test_installed_version_three_manifest_never_imports_plugin(
+def test_installed_plugin_metadata_is_available_after_import(
     installed_plugin_factory, monkeypatch
 ):
     from artifactspec.plugins.discovery import installed_plugins
@@ -190,13 +177,13 @@ def test_installed_version_three_manifest_never_imports_plugin(
     fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     catalog = ManifestCatalog(
-        item[1] for item in installed_plugins(only={"example"}).values()
+        item.to_dict() for item in installed_plugins(only={"example"}).values()
     )
     result = validate(
         'Output image.\nCreate circle named c.\nSet color of c to "red".', catalog
     )
     assert result.valid and not result.diagnostics
-    assert not fixture["marker"].exists()
+    assert fixture["marker"].exists()
 
 
 def test_validation_cli_human_and_json_diagnostics(
@@ -207,12 +194,12 @@ def test_validation_cli_human_and_json_diagnostics(
     from typer.testing import CliRunner
 
     from artifactspec import cli
-    from artifactspec.commands import validate as validate_command
+    from artifactspec.cli.commands import validate as validate_command
 
     monkeypatch.setattr(
         validate_command,
-        "installed_plugins",
-        lambda: {"typed": (None, typed_registry.manifests()[0])},
+        "load_cli_registry",
+        lambda **kwargs: typed_registry,
     )
     path = tmp_path / "scene.art"
     path.write_text('Output image.\nSet color of missing to "red".', encoding="utf-8")
@@ -246,9 +233,7 @@ def test_cli_reports_missing_file_without_fake_validation_result(tmp_path):
     assert "artifactspec:" in result.stderr
 
 
-def test_capability_json_v1_remains_stable_for_v3_plugins(
-    installed_plugin_factory, monkeypatch
-):
+def test_capability_json_includes_plugin_syntax(installed_plugin_factory, monkeypatch):
     from artifactspec.plugins.discovery import capabilities
 
     manifest = {
@@ -278,13 +263,7 @@ def test_capability_json_v1_remains_stable_for_v3_plugins(
     }
     fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    from artifactspec.plugins import discovery
-
-    original = discovery.installed_plugins
-    monkeypatch.setattr(
-        discovery, "installed_plugins", lambda: original(only={"example"})
-    )
-    item = capabilities(details=True)["plugins"][0]
-    assert item["capabilities"]["phrases"] == [{"name": "circle", "outputs": []}]
-    assert item["capabilities"]["properties"] == [{"name": "color", "outputs": []}]
-    assert not fixture["marker"].exists()
+    item = capabilities(details=True, only={"example"})["plugins"][0]
+    assert item["phrases"][0]["syntax"] == "Create circle named {name}."
+    assert item["properties"][0]["target_types"] == ["circle"]
+    assert fixture["marker"].exists()

@@ -1,6 +1,5 @@
-"""Version of the optional SVG distribution."""
+"""Public artifactspec-svg package namespace."""
 
-from importlib.metadata import version
+from artifactspec_svg._version import VERSION
 
-VERSION = version("artifactspec-svg")
 __all__ = ["VERSION"]

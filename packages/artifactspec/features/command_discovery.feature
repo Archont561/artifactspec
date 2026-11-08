@@ -3,3 +3,4 @@ Feature: Automatically register built-in Typer applications
     Given a built-in command module exposes a Typer application with multiple commands and a nested group
     When the CLI discovers command modules
     Then both commands and the nested command are available from the Typer application
+    And the module is loaded from the CLI commands package

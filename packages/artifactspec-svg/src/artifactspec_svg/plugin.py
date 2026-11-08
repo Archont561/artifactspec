@@ -9,35 +9,27 @@ from artifactspec_svg import renderer as _renderer  # noqa: F401
 from artifactspec_svg.registration import plugin
 
 
-@plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
+@plugin.phrase("text")
 def create_text(context: PhraseContext) -> None:
     context.create("text")
 
 
-@plugin.phrase(
-    "rectangle", object_type="rectangle", syntax="Create rectangle named {name}."
-)
+@plugin.phrase("rectangle")
 def create_rectangle(context: PhraseContext) -> None:
     context.create("rectangle")
 
 
-@plugin.property(
-    "value", target_types=("text",), syntax="Set value of {reference} to {value}."
-)
+@plugin.property("value")
 def text_value(context: PropertyContext) -> None:
     context.set("value", context.value)
 
 
-@plugin.property(
-    "color",
-    target_types=("text", "rectangle"),
-    syntax="Set color of {reference} to {value}.",
-)
+@plugin.property("color")
 def color(context: PropertyContext) -> None:
     context.set("color", context.value)
 
 
-@plugin.representation("diagram", target_types=("text", "rectangle"))
+@plugin.representation("diagram")
 def diagram(context: RepresentationContext) -> None:
     node = context.node
     properties = dict(node.properties)

@@ -1,7 +1,5 @@
-"""ArtifactSpec Manim package version."""
+"""Public artifactspec-manim package namespace."""
 
-from importlib.metadata import version as _version
-
-VERSION = _version("artifactspec-manim")
+from artifactspec_manim._version import VERSION
 
 __all__ = ["VERSION"]

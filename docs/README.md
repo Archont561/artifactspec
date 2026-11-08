@@ -1,6 +1,6 @@
 # Documentation
 
-ArtifactSpec provides plugin registration, static capability discovery, and a
+ArtifactSpec provides plugin registration, plugin object discovery, and a
 small parser. Semantic validation, phase contexts and rendering remain design work.
 
 - [Plugin registration and capability discovery](plugins.md)

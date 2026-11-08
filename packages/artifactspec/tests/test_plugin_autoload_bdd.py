@@ -1,4 +1,4 @@
-"""Installed plugin discovery remains static while rendering autoloads code."""
+"""Plugin discovery imports selected executable plugin objects."""
 
 import json
 from pathlib import Path
@@ -37,8 +37,8 @@ def plugin(state, tmp_path, monkeypatch, installed_plugin_factory):
     }
     source = f"""from pathlib import Path
 Path({str(marker)!r}).write_text("loaded")
-from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={{"image": "Output image."}})
+from artifactspec.plugin import Plugin, Renderer
+plugin = Plugin("example", outputs={{"image": "Output image."}}, renderers=(Renderer("example-svg"),))
 @plugin.renderer("example-svg")
 def render(ctx):
     ctx.emit(b"example artifact", media_type="image/svg+xml", editable=True)
@@ -56,14 +56,14 @@ def capabilities(state):
     state["result"] = CliRunner().invoke(app, ["capabilities", "--details"])
 
 
-@then("the plugin is listed without executing its code")
-def static_discovery(state):
+@then("the plugin is imported and listed")
+def imported_discovery(state):
     assert state["result"].exit_code == 0, state["result"].output
     assert any(
         item["id"] == "example"
         for item in json.loads(state["result"].stdout)["plugins"]
     )
-    assert not state["marker"].exists()
+    assert state["marker"].exists()
 
 
 def run(state, extra):
@@ -112,7 +112,7 @@ def loaded(state):
     assert state["destination"].read_bytes() == b"example artifact"
 
 
-def test_autoload_rejects_conflicts_before_importing_plugins(
+def test_autoload_rejects_conflicts_after_importing_plugins(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
@@ -148,7 +148,8 @@ def test_autoload_rejects_conflicts_before_importing_plugins(
     assert result.exit_code == 2
     assert json.loads(result.stdout)["error"]["code"] == "plugin_error"
     assert "conflicting renderers" in json.loads(result.stdout)["error"]["message"]
-    assert not fixture["marker"].exists()
+    assert fixture["marker"].exists()
+    fixture["marker"].unlink()
     selected = CliRunner().invoke(
         app,
         [
@@ -207,20 +208,32 @@ def test_autoload_failure_can_be_avoided_with_explicit_opt_out(
     assert success.exit_code == 0, success.output
 
 
-def test_validation_and_language_server_do_not_import_plugins(
+def test_validation_and_language_server_import_plugins_and_allow_opt_out(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     from artifactspec.editor import lsp
 
     fixture = installed_plugin_factory(
-        module_source="raise RuntimeError('must not import')\n"
+        module_source="raise RuntimeError('import failed')\n"
     )
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "scene.art"
     source.write_text("Output image.\nCreate text named t.", encoding="utf-8")
     validation = CliRunner().invoke(app, ["validate", str(source), "--format", "json"])
-    assert validation.exit_code == 0, validation.output
-    assert json.loads(validation.stdout)["valid"]
+    assert validation.exit_code == 2 and "import failed" in validation.stderr
+    validation = CliRunner().invoke(
+        app,
+        [
+            "validate",
+            str(source),
+            "--format",
+            "json",
+            "--no-plugin-autoload",
+            "--plugin",
+            "svg",
+        ],
+    )
+    assert validation.exit_code == 0 and json.loads(validation.stdout)["valid"]
     started = []
 
     class FakeServer:
@@ -228,6 +241,7 @@ def test_validation_and_language_server_do_not_import_plugins(
             started.append(True)
 
     monkeypatch.setattr(lsp, "create_server", lambda catalog: FakeServer())
-    lsp.start()
+    with pytest.raises(Exception, match="import failed"):
+        lsp.start()
+    lsp.start(autoload=False, selected=("svg",))
     assert started == [True]
-    assert not fixture["marker"].exists()

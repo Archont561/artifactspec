@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 from artifactspec.core.models import Content, ContentNode
 from artifactspec.core.pipeline import PipelineError, build_content
 from artifactspec.core.rendering import compose, render
+from artifactspec.plugin import Phrase, Renderer, Representation
 from artifactspec.plugins import Plugin, Registry
 
 pytest_plugins = ["artifactspec.testing.pytest_plugin"]
@@ -132,9 +133,11 @@ def test_missing_or_duplicate_artifacts_are_rejected(tmp_path):
         ),
     ):
         plugin = Plugin(
-            "custom", "1", outputs=("image",), output_syntax={"image": "Output image."}
+            "custom",
+            outputs={"image": "Output image."},
+            renderers=(Renderer("custom", ("image",)),),
         )
-        plugin.renderer("custom", outputs=("image",))(handler)
+        plugin.renderer("custom")(handler)
         reg = registry()
         reg.register(plugin)
         destination = tmp_path / "image"
@@ -212,7 +215,7 @@ def test_renderer_failure_after_emitting_does_not_replace_existing_file(tmp_path
         raise RuntimeError("broken")
 
     plugin = Plugin(
-        "broken", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "broken", outputs={"image": "Output image."}, renderers=(Renderer("broken"),)
     )
     plugin.renderer("broken")(failing)
     reg = registry()
@@ -274,16 +277,12 @@ def test_unavailable_renderer_is_rejected_before_plugin_handlers_run(tmp_path):
     called = []
     plugin = Plugin(
         "test-preflight",
-        "1",
-        outputs=("image",),
-        output_syntax={"image": "Output image."},
+        outputs={"image": "Output image."},
+        phrases=(Phrase("item", "item", "Create item named {name}."),),
+        representations=(Representation("layout", ("item",)),),
     )
-    plugin.phrase("item", object_type="item", syntax="Create item named {name}.")(
-        lambda ctx: called.append("phrase")
-    )
-    plugin.representation("layout", target_types=("item",))(
-        lambda ctx: called.append("representation")
-    )
+    plugin.phrase("item")(lambda ctx: called.append("phrase"))
+    plugin.representation("layout")(lambda ctx: called.append("representation"))
     reg = Registry()
     reg.register(plugin)
     with pytest.raises(PipelineError, match="no renderers"):

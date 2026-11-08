@@ -8,14 +8,17 @@ from artifactspec.core.contexts import (
     PropertyContext,
     RepresentationContext,
 )
-from artifactspec.plugins import Plugin
+from artifactspec.plugin import Phrase, Plugin, Property, Representation
 
 plugin = Plugin(
     "events",
-    "0.1.0",
-    outputs=("image", "report"),
-    schema_version=3,
-    output_syntax={"image": "Output image.", "report": "Output report."},
+    outputs={"image": "Output image.", "report": "Output report."},
+    phrases=(Phrase("event", "event", "Create event named {name}."),),
+    properties=(
+        Property("date", ("event",), "Set date of {reference} to {value}."),
+        Property("event-label", ("event",), "Set label of {reference} to {value}."),
+    ),
+    representations=(Representation("diagram", ("event",)),),
 )
 
 
@@ -34,30 +37,24 @@ def _label(value: str) -> None:
         raise ValueError("event label must not be empty")
 
 
-@plugin.phrase("event", object_type="event", syntax="Create event named {name}.")
+@plugin.phrase("event")
 def create_event(context: PhraseContext) -> None:
     context.create("event")
 
 
-@plugin.property(
-    "date", target_types=("event",), syntax="Set date of {reference} to {value}."
-)
+@plugin.property("date")
 def event_date(context: PropertyContext) -> None:
     _date(context.value)
     context.set("date", context.value)
 
 
-@plugin.property(
-    "event-label",
-    target_types=("event",),
-    syntax="Set label of {reference} to {value}.",
-)
+@plugin.property("event-label")
 def event_label(context: PropertyContext) -> None:
     _label(context.value)
     context.set("value", context.value)
 
 
-@plugin.representation("diagram", target_types=("event",))
+@plugin.representation("diagram")
 def represent_event(context: RepresentationContext) -> None:
     node = context.node
     properties = dict(node.properties)

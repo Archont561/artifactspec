@@ -1,11 +1,11 @@
-"""The installed plugin advertises its runtime contract without importing it."""
+"""The installed entry point loads the actual SVG plugin object."""
 
 
-def test_installed_manifest_matches_plugin_declaration():
+def test_installed_plugin_object_is_registered():
     from artifactspec_svg.plugin import plugin
 
     from artifactspec.plugins.discovery import installed_plugins
 
-    entry, manifest = installed_plugins()["svg"]
-    assert entry.value == "artifactspec_svg.plugin:plugin"
-    assert manifest == plugin.manifest()
+    loaded = installed_plugins(only={"svg"})["svg"]
+    assert loaded is plugin
+    assert loaded.to_dict()["version"] == "0.1.0"

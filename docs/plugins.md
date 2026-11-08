@@ -1,165 +1,134 @@
-# Plugin registration and capability discovery
+# Plugin registration and discovery
 
 ## Trust boundary
 
-Plugins are executable Python and are **not sandboxed**. Rendering automatically
-imports all installed ArtifactSpec plugins by default: installation is therefore
-authorization to execute that code during rendering. Review the distribution
-and its dependencies before installing it. Use `--no-plugin-autoload` and
-`--plugin ID` to load only explicitly selected plugins. The Python API continues
-to require explicit `Registry` registration or loading.
+Plugins are executable Python and are **not sandboxed**. Discovery imports the
+objects named by installed entry points. Therefore `capabilities`, `validate`,
+`lsp`, and `render` all execute installed plugin code by default. Install only
+plugins and dependencies you trust. Parsing and validation use the loaded
+objects' declarative syntax; they do not invoke contribution handlers.
 
-Capability discovery, validation, and the language server read installed
-metadata and JSON manifests; they do not import plugin modules or invoke entry
-points. Metadata is untrusted self-reported information, not proof of safety,
-correctness, or compatibility. Normal Python startup, environment setup, and
-package installation may themselves execute code; custom Python distribution
-finders may also execute while metadata is enumerated. Discovery cannot sandbox
-those operations.
+To import only selected plugins, use `--no-plugin-autoload` and repeat
+`--plugin ID`. With autoload enabled, `--plugin ID` requires that plugin but
+still loads all installed plugins. This works for all four commands. CLI and LSP
+redirect ordinary import-time stdout to stderr to protect their output protocols;
+plugin code can still have arbitrary side effects or write directly to streams.
+An import error or a conflict can occur after earlier imports have executed;
+there is no rollback or pre-import conflict check for contributions.
 
-## Identity and static metadata
+## Declaring a plugin
 
-An installed distribution advertises each plugin with an entry point in the
-`artifactspec.plugins` group. The entry point name is the plugin ID (lowercase
-ASCII letters and digits separated by `-`, `_`, or `.`), and its value points to
-a `Plugin` object, for example `my_plugin:plugin`. The distribution must ship
-`my_plugin/artifactspec_plugins/example.json` for the entry point named `example`.
-The first module component determines the directory. The file must be listed in
-the distribution's installed files (wheel RECORD); discovery reads it from that
-distribution, without importing the module. Ensure the build includes the JSON as
-package data. Multiple plugins in one distribution have separate manifests. For
-example, a plugin package declares its entry point in `pyproject.toml`:
-
-```toml
-[project.entry-points."artifactspec.plugins"]
-example = "my_plugin:plugin"
-```
-
-Wheel builders must include `my_plugin/artifactspec_plugins/example.json`; a
-source checkout or editable installation without this file in its distribution
-file records cannot be discovered.
-
-A schema version 3 manifest declares complete syntax as data:
-
-```json
-{
-  "schema_version": 3,
-  "id": "shapes",
-  "version": "1.0",
-  "outputs": ["image"],
-  "output_syntax": {"image": "Output image."},
-  "phrases": [{"name": "circle", "outputs": [], "object_type": "circle", "syntax": "Draw {name}."}],
-  "properties": [{"name": "color", "outputs": [], "target_types": ["circle"], "syntax": "Color {reference} with {value}."}],
-  "representations": [{"name": "diagram", "outputs": [], "target_types": ["circle"]}],
-  "renderers": []
-}
-```
-
-Each output has a literal declaration in `output_syntax`. Phrase templates use
-exactly one `{name}` placeholder, and property templates use exactly one each of
-`{reference}` and `{value}`. The remaining text is literal; templates must be
-single trimmed lines of at most 1024 characters, with literal text separating
-adjacent placeholders. Double braces represent literal braces. A name or
-reference is an ASCII identifier; a value is a JSON string. `it` is a reserved
-reference and cannot be a declared name. There is no arbitrary plugin-supplied
-regex or executable grammar. Source lines are trimmed before matching. When a
-statement matches multiple templates, parsing reports ambiguity instead of
-guessing. Identical output declarations for the same output are deduplicated.
-
-`object_type` and `target_types` are nonempty, exact, case-sensitive type names;
-there is no subtype model. Each contribution has a nonempty name and an output
-list. An empty list means all outputs declared by its plugin; a nonempty list
-must be a subset. Duplicate plugin IDs and duplicate contribution names fail;
-representations may share a name only when their target types do not overlap.
-These rules are checked before runtime autoload. Metadata is self-reported, not
-proof of correctness. Versions 1 and 2 do not have complete templates and are
-rejected with a migration diagnostic; there is no legacy grammar fallback.
-The plugin-defined `version` is not automatically compared to distribution or
-core versions.
-
-## Migrating version 1 or 2 plugins
-
-1. Set `schema_version` to 3 in the static JSON and runtime declaration.
-   Supply `output_syntax` with a complete literal statement for every output.
-2. Give every phrase an `object_type` and a complete `syntax` containing
-   `{name}`. Give every property nonempty `target_types` and a complete
-   `syntax` containing `{reference}` and `{value}`. Put the same declarations
-   on the corresponding runtime decorators.
-3. Give every representation nonempty `target_types` and update its handler
-   to handle `context.node` at `context.index` rather than iterating the whole
-   document. Representations of the same name may be contributed by independent
-   plugins for disjoint object types.
-4. Ship the JSON in wheel file records, verify that it matches `plugin.manifest()`
-   exactly, and test the installed wheel. Run `artifactspec capabilities`,
-   `validate`, and `lsp` against the metadata before trusting runtime imports.
-
-Remove any use of `--builtin-basic` and `--no-builtin-basic`; there is no core
-basic plugin. Install the needed plugins instead and select their representation
-and renderer explicitly. The packaged examples use `diagram` and `svg`.
-Version 1's unverified-type warnings are not a compatibility mechanism: old
-manifests are rejected before plugin code is imported.
-
-## Runtime registration
+The `Plugin` object is the only source of its capability metadata. Declare the
+output syntax and typed contributions in its constructor, then attach handlers
+using decorators. For example:
 
 ```python
-from artifactspec.plugins import Plugin, Registry
+from html import escape
+from artifactspec.plugin import Phrase, Plugin, Property, Renderer, Representation
 
-plugin = Plugin("shapes", "1.0", outputs=("image",),
-                output_syntax={"image": "Output image."})
+plugin = Plugin(
+    id="shapes",
+    outputs={"image": "Output image."},
+    phrases=(Phrase("circle", "circle", "Draw {name}."),),
+    properties=(Property("color", ("circle",), "Color {reference} with {value}."),),
+    representations=(Representation("diagram", ("circle",)),),
+    renderers=(Renderer("svg"),),
+)
 
-@plugin.phrase("circle", object_type="circle", syntax="Draw {name}.")
+@plugin.phrase("circle")
 def circle(context):
     context.create("circle")
 
-@plugin.property("color", target_types=("circle",),
-                 syntax="Color {reference} with {value}.")
+@plugin.property("color")
 def color(context):
     context.set("color", context.value)
 
-@plugin.representation("diagram", target_types=("circle",))
+@plugin.representation("diagram")
 def diagram(context):
     context.text(context.node.name, "circle", x=20, y=40 + 70 * context.index)
 
-registry = Registry()
-registry.register(plugin)
+@plugin.renderer("svg")
+def render(context):
+    text = "".join(f"<text>{escape(element.text)}</text>" for element in context.composition.elements)
+    context.emit(f'<svg xmlns="http://www.w3.org/2000/svg">{text}</svg>'.encode(),
+                 media_type="image/svg+xml", editable=True)
 ```
 
-The decorators also support `renderer`; each returns the original callable. Registration validates the whole plugin before modifying the
-registry and freezes its contributions. `registry.handler(kind, name, output=...)`
-returns a registered callable only when it is compatible with the requested output.
-For a representation shared by multiple plugins, use
-`registry.representation_handler(name, object_type, output=...)` to select the
-contribution for a particular semantic type.
-Discovery of explicitly registered plugins uses `registry.manifests()`.
-`registry.load_installed("example")` imports a selected plugin, while
-`registry.load_all_installed()` imports every installed plugin. Both compare
-the resulting `Plugin` with its static manifest. The latter checks installed
-metadata conflicts before importing any entry point. An error importing a later
-plugin cannot undo code already executed by earlier plugins. With autoload
-disabled, selecting one plugin checks only that plugin's installed metadata,
-so an unrelated conflicting plugin need not be loaded. Imports use Python's
-normal module search path; shadowed modules may execute before the manifest
-comparison.
+The example renderer supports text elements only. Real renderers must validate
+the element types and content they accept. Decorator names must match a declared
+contribution; duplicate handlers and modifications after registration fail.
+`Plugin.to_dict()` returns an independent JSON-serializable dictionary, including
+all syntax and semantic metadata. It does not invoke handlers. Declaring a
+capability without attaching a handler allows metadata inspection, but trying to
+execute it reports a missing-handler error.
 
-Public phase protocols live in `artifactspec.core.contexts`; fake contexts and
-pytest helpers live in `artifactspec.testing` and
-`artifactspec.testing.pytest_plugin`. See `docs/rendering.md` for their
-contracts. SVG syntax, layout and rendering belong to the optional `artifactspec-svg`
-distribution. Dated-event syntax and representation belong to the optional
-`artifactspec-events` distribution. Core includes no built-in content plugin.
+A plugin distribution advertises the object directly:
+
+```toml
+[project.entry-points."artifactspec.plugins"]
+shapes = "my_plugin:plugin"
+```
+
+The entry point name must equal the plugin ID, which uses lowercase ASCII
+letters and digits separated by `-`, `_`, or `.`. Discovery imports the module,
+checks that the entry point resolves to a `Plugin`, associates the object with
+its owning installed distribution, and registers it. No JSON manifest or wheel
+file record is required. The plugin version comes from the entry point's
+installed distribution metadata, built from the project's `pyproject.toml`; it is
+not an argument to `Plugin`. A plugin constructed or registered directly without
+an installed entry point has `version: null` in `to_dict()`. Discovery rejects a
+single object associated with different distributions rather than guessing its
+version.
+
+## Syntax and composition
+
+`outputs` maps each output name to a literal declaration template. `Phrase`
+has a name, object type, syntax, and optional output subset. Its template uses
+exactly one `{name}`. `Property` has a name, nonempty target types, syntax, and
+optional output subset. Its template uses exactly one each of `{reference}` and
+`{value}`. `Representation` declares a name and nonempty target types;
+`Renderer` declares a name. Both accept an optional output subset. An empty
+subset means all outputs declared by that plugin.
+
+Templates are single trimmed lines of at most 1024 characters. All text outside
+the placeholders is literal; literal text must separate adjacent placeholders,
+and double braces represent literal braces. Names and references are ASCII
+identifiers, and values are JSON strings. `it` is a reserved reference and
+cannot be a declared name. Source lines are trimmed before matching. Ambiguous
+matches are errors, while identical declarations of the same output are
+deduplicated. Type names are exact and case-sensitive; there is no subtype model.
+
+Duplicate plugin IDs and duplicate contribution names are errors. Independent
+plugins may share a representation name only for disjoint target types. Core
+then dispatches each semantic node to its matching representation handler. Use
+`registry.representation_handler(name, object_type, output=...)` when selecting
+a handler directly. The output is not a guarantee that a renderer exists.
+
+## Migration from JSON manifests
+
+Remove the installed `artifactspec_plugins/*.json` files. Move each output,
+phrase, property, representation, and renderer declaration into the `Plugin`
+constructor using the typed classes above. Move handler metadata out of the
+decorators, leaving their contribution names. Remove the version argument; the
+installed distribution supplies it. Keep the entry point pointing to the actual
+object. Update integrations to call `to_dict()` and to expect imports during
+discovery, validation, and LSP startup. Older schema-v1/v2 and schema-v3 JSON
+manifest files are not used for installed discovery. See
+[rendering](rendering.md) for phase contexts and behavior.
 
 ## CLI and JSON
 
-The console script and `python -m artifactspec` both invoke the Typer app
-`artifactspec.cli:app`. `artifactspec capabilities` (or
-`python -m artifactspec capabilities`) emits a JSON object with
-`schema_version: 1` and a `plugins` array sorted by ID. The
-default summary contains each plugin's `id`, `version`, `outputs`, and counts
-under `capabilities`, with keys `phrases`, `properties`, `representations`, and
-`renderers`. `--details` replaces those counts with arrays of `{name, outputs}`
-objects. `--output svg` retains only plugins declaring `svg` and contributions
-compatible with it; the output list on each returned plugin is narrowed to the
-requested output. Empty results use an empty `plugins` array. Discovery errors
-produce a nonzero exit and a diagnostic on stderr, not partial JSON. The capability command does not import installed plugins. Plugin code may
-report inaccurate metadata; runtime rendering loads code separately as described
-above.
+`artifactspec capabilities` emits a version 2 JSON envelope with plugins sorted
+by ID. Its default summary reports each ID, installed distribution version,
+outputs, and contribution counts. `--details` returns each plugin's complete `to_dict()` metadata; `--output image` filters incompatible outputs
+and contributions. Discovery errors produce a nonzero exit and a diagnostic on
+stderr, not partial JSON. `to_dict()` returns the underlying schema-v3 metadata,
+which is separate from the CLI envelope version. The version 2 details shape
+replaces the previous version 1 abbreviated contribution arrays.
+
+The Python API exposes `Registry.register(plugin)` for explicit objects,
+`Registry.load_installed(id)` for one installed entry point, and
+`Registry.load_all_installed()` for all installed entry points. Registration
+freezes the object's contribution bindings and checks conflicts. Public phase
+protocols live in `artifactspec.core.contexts`; test fakes are in
+`artifactspec.testing` and its pytest plugin.

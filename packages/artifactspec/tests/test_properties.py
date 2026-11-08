@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 from artifactspec.core.parser import ParseError, parse
 from artifactspec.core.validation import validate
 from artifactspec.editor.lsp import _LanguageDocument, _position
+from artifactspec.plugin import Phrase, Property
 from artifactspec.plugins import (
     ManifestCatalog,
     Plugin,
@@ -30,14 +31,15 @@ value_text = st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_s
 
 def typed_catalog():
     plugin = Plugin(
-        "shapes", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "shapes",
+        outputs={"image": "Output image."},
+        phrases=(Phrase("circle", "circle", "Create circle named {name}."),),
+        properties=(
+            Property("label", ("circle",), "Set label of {reference} to {value}."),
+        ),
     )
-    plugin.phrase("circle", object_type="circle", syntax="Create circle named {name}.")(
-        lambda context: pytest.fail("called")
-    )
-    plugin.property(
-        "label", target_types=("circle",), syntax="Set label of {reference} to {value}."
-    )(lambda context: pytest.fail("called"))
+    plugin.phrase("circle")(lambda context: pytest.fail("called"))
+    plugin.property("label")(lambda context: pytest.fail("called"))
     return ManifestCatalog([plugin.manifest()])
 
 
@@ -153,16 +155,15 @@ def test_duplicate_outputs_and_plugin_id_conflicts_are_rejected(output):
 @given(object_type=identifier, target_type=identifier)
 def test_declared_types_are_matched_exactly(object_type, target_type):
     plugin = Plugin(
-        "typed", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        "typed",
+        outputs={"image": "Output image."},
+        phrases=(Phrase("thing", object_type, "Create thing named {name}."),),
+        properties=(
+            Property("label", (target_type,), "Set label of {reference} to {value}."),
+        ),
     )
-    plugin.phrase(
-        "thing", object_type=object_type, syntax="Create thing named {name}."
-    )(lambda ctx: None)
-    plugin.property(
-        "label",
-        target_types=(target_type,),
-        syntax="Set label of {reference} to {value}.",
-    )(lambda ctx: None)
+    plugin.phrase("thing")(lambda ctx: None)
+    plugin.property("label")(lambda ctx: None)
     result = validate(
         'Output image.\nCreate thing named x.\nSet label of x to "x".',
         ManifestCatalog([plugin.manifest()]),
@@ -194,8 +195,6 @@ def test_lsp_positions_use_utf16_units(text, prefix_length):
 def test_capability_discovery_matches_filtered_static_metadata(
     outputs, details, selected
 ):
-    from unittest.mock import patch
-
     from artifactspec.plugins import discovery
 
     manifest = {
@@ -216,18 +215,26 @@ def test_capability_discovery_matches_filtered_static_metadata(
         "representations": [],
         "renderers": [],
     }
-    with patch.object(
-        discovery, "installed_plugins", return_value={"example": (None, manifest)}
-    ):
-        result = discovery.capabilities(details=details, output=selected)
-    assert result["schema_version"] == 1
+    result = discovery.capabilities(
+        details=details, output=selected, plugins=[manifest]
+    )
+    assert result["schema_version"] == 2
     if selected is not None and selected not in outputs:
         assert result["plugins"] == []
     else:
         entry = result["plugins"][0]
         assert entry["outputs"] == (sorted(outputs) if selected is None else [selected])
-        assert entry["capabilities"]["phrases"] == (
-            [{"name": "circle", "outputs": []}] if details else 1
+        assert (entry["phrases"] if details else entry["capabilities"]["phrases"]) == (
+            [
+                {
+                    "name": "circle",
+                    "outputs": [],
+                    "object_type": "circle",
+                    "syntax": "Create circle named {name}.",
+                }
+            ]
+            if details
+            else 1
         )
         assert manifest["outputs"] == outputs
 
@@ -249,8 +256,7 @@ def test_command_discovery_registers_all_public_modules(names):
 
     from typer.testing import CliRunner
 
-    from artifactspec import commands
-    from artifactspec.cli import create_app
+    from artifactspec.cli import commands, create_app
 
     with tempfile.TemporaryDirectory() as directory:
         for name in names:
@@ -258,7 +264,7 @@ def test_command_discovery_registers_all_public_modules(names):
                 f"import typer\napp = typer.Typer()\n@app.command({name!r})\ndef run():\n    pass\n",
                 encoding="utf-8",
             )
-        module_names = [f"artifactspec.commands.{name}" for name in names]
+        module_names = [f"artifactspec.cli.commands.{name}" for name in names]
         # Preserve unrelated imports and restore only modules created in this case.
         previous = {
             name: sys.modules.pop(name) for name in module_names if name in sys.modules
@@ -274,7 +280,7 @@ def test_command_discovery_registers_all_public_modules(names):
 
                 assert sorted(get_command(app).commands) == sorted(names)
                 assert [group.typer_instance for group in app.registered_groups] == [
-                    sys.modules[f"artifactspec.commands.{name}"].app
+                    sys.modules[f"artifactspec.cli.commands.{name}"].app
                     for name in sorted(names)
                 ]
         finally:
@@ -298,7 +304,7 @@ def test_nested_command_trees_invoke_the_correct_leaf(depth, text):
     import typer
     from typer.testing import CliRunner
 
-    from artifactspec.cli import _check_command_tree
+    from artifactspec.cli._app import _check_command_tree
 
     root = typer.Typer()
     current = root
