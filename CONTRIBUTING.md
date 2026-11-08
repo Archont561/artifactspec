@@ -19,8 +19,9 @@ pixi run --locked install-projects
 
 The local projects are not editable Pixi dependencies. Package test and coverage
 tasks install them without build isolation and test the current source. Re-run
-`install-projects` after changing package metadata. Default-environment activation exposes both checkout source trees via
-`PYTHONPATH`. The optional Manim environment is installed separately with
+`install-projects` after changing package metadata. Default-environment activation
+adds `src` directories belonging to tracked or unignored `pyproject.toml` files
+to `PYTHONPATH`. The optional Manim environment is installed separately with
 `pixi install --locked -e manim`; see the [README](README.md). Run
 `pixi run install-hooks` to check and install the hooks defined in
 `lefthook.yml` (agents must do this at session start). Lefthook backs up existing

@@ -104,7 +104,8 @@ requirements, because native pixi-sandbox only transports locked wheels.
 `pixi run install-projects` installs both local projects as non-editable packages
 using the locked Hatchling backend and without dependency resolution or build
 isolation. Package-test and coverage tasks run this first; default-environment
-activation adds the source paths to `PYTHONPATH` so coverage measures the checkout. This does not add local
+activation discovers tracked or unignored Python projects with `src` directories
+and adds those paths to `PYTHONPATH` so coverage measures the checkout. This does not add local
 project wheels to the sandbox; the checkout is required after restore. Bun's
 `node_modules` are not packed, so Bun tooling requires a separate install.
 
