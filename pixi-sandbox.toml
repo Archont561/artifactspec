@@ -1,0 +1,8 @@
+# Initial sandbox policy; generate and validate sandbox automation once pixi-sandbox is configured.
+schema = 1
+branch_prefix = "sandbox"
+
+[[bundle]]
+name = "developer"
+environments = ["default"]
+platforms = ["linux-64"]

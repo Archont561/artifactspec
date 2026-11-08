@@ -1,0 +1,196 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.detect.outputs.scope }}
+      run_docs: ${{ steps.detect.outputs.run_docs }}
+      run_scripts: ${{ steps.detect.outputs.run_scripts }}
+      run_full: ${{ steps.detect.outputs.run_full }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select checks
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/detect_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" --event "$EVENT_NAME"
+
+  commit-messages:
+    name: Conventional commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          pixi-version: v0.84.1
+          locked: true
+      - name: Check commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            # New branch / manual run: validate all commits reachable from head.
+            pixi run --locked -x convco check --merges "$HEAD_SHA"
+          else
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              BASE_SHA="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            fi
+            # Fail closed when a comparison revision is unavailable.
+            git cat-file -e "${BASE_SHA}^{commit}"
+            git cat-file -e "${HEAD_SHA}^{commit}"
+            pixi run --locked -x convco check --merges "${BASE_SHA}..${HEAD_SHA}"
+          fi
+
+  docs:
+    name: Documentation and backlog
+    needs: changes
+    if: needs.changes.outputs.run_docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check whitespace in changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          fi
+          git diff --check "$BASE_SHA" "$HEAD_SHA" --
+
+  scripts:
+    name: Scripts suite
+    needs: changes
+    if: needs.changes.outputs.run_scripts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          pixi-version: v0.84.1
+          locked: true
+      - run: pixi run --locked test-scripts
+
+  full:
+    name: Full checks and coverage
+    needs: changes
+    if: needs.changes.outputs.run_full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          pixi-version: v0.84.1
+          locked: true
+      - run: pixi run --locked lint
+      - run: pixi run --locked format-check
+      - run: pixi run --locked typecheck
+      - run: pixi run --locked check-packages
+      - run: pixi run --locked audit
+      - run: pixi run --locked alint
+      - run: pixi run --locked actionlint
+      - run: pixi run --locked -e gherkin lint-features
+      - run: pixi run --locked coverage-all
+      - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+      - name: Explain skipped upload for fork pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: echo 'Codecov upload skipped for fork pull requests; tests and coverage still ran.'
+
+  compatibility:
+    name: Core Python ${{ matrix.python }} on ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.run_full == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.11', '3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install core and test dependencies
+        run: python -m pip install -e "packages/artifactspec[dev]"
+      - name: Test core package
+        run: python -m pytest packages/artifactspec/tests/test_package_version_bdd.py
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [changes, commit-messages, docs, scripts, full, compatibility]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify selected checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          COMMITS_RESULT: ${{ needs.commit-messages.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          SCRIPTS_RESULT: ${{ needs.scripts.result }}
+          FULL_RESULT: ${{ needs.full.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          RUN_DOCS: ${{ needs.changes.outputs.run_docs }}
+          RUN_SCRIPTS: ${{ needs.changes.outputs.run_scripts }}
+          RUN_FULL: ${{ needs.changes.outputs.run_full }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CHANGES_RESULT" == success && "$COMMITS_RESULT" == success ]]
+          [[ "$RUN_DOCS" == true || "$RUN_SCRIPTS" == true || "$RUN_FULL" == true ]]
+          [[ "$RUN_DOCS" != true || "$DOCS_RESULT" == success ]]
+          [[ "$RUN_SCRIPTS" != true || "$SCRIPTS_RESULT" == success ]]
+          [[ "$RUN_FULL" != true || "$FULL_RESULT" == success ]]
+          [[ "$RUN_FULL" != true || "$COMPATIBILITY_RESULT" == success ]]
+          echo 'All selected CI checks passed.'

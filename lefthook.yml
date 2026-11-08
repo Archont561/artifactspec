@@ -1,0 +1,28 @@
+# Hooks use the same locked Pixi tasks as local development and CI.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: python-lint
+      run: pixi run --locked lint
+    - name: python-format
+      run: pixi run --locked format-check
+    - name: python-types
+      run: pixi run --locked typecheck
+    - name: gherkin-lint
+      run: pixi run --locked -e gherkin lint-features
+    - name: repository-policy
+      run: pixi run --locked alint
+    - name: workflow-lint
+      run: pixi run --locked actionlint
+
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      run: pixi run --locked lint-commit < {1}
+
+pre-push:
+  jobs:
+    - name: tests
+      run: pixi run --locked test
+    - name: manim-package-tests
+      run: pixi run --locked test-manim

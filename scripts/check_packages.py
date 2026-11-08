@@ -1,0 +1,66 @@
+"""Build, validate, and smoke-test the distributions in an isolated environment."""
+
+import os
+import subprocess
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def run(*args: str) -> None:
+    subprocess.run(args, cwd=ROOT, check=True)
+
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix="artifactspec-packages-") as directory:
+        root = Path(directory)
+        outputs = root / "distributions"
+        for package in ("artifactspec", "artifactspec-manim"):
+            run(
+                sys.executable,
+                "-m",
+                "build",
+                str(ROOT / "packages" / package),
+                "--outdir",
+                str(outputs),
+            )
+        files = sorted(outputs.iterdir())
+        if len(files) != 4:
+            raise RuntimeError("Expected one wheel and one sdist per distribution")
+        run(sys.executable, "-m", "twine", "check", *(str(path) for path in files))
+        wheels = sorted(outputs.glob("*.whl"))
+        for wheel in wheels:
+            with zipfile.ZipFile(wheel) as archive:
+                if not any(
+                    name.endswith(".dist-info/licenses/LICENSE")
+                    for name in archive.namelist()
+                ):
+                    raise RuntimeError(f"License missing from {wheel.name}")
+        core = next(path for path in wheels if path.name.startswith("artifactspec-"))
+        manim = next(
+            path for path in wheels if path.name.startswith("artifactspec_manim-")
+        )
+        venv = root / "venv"
+        run(sys.executable, "-m", "venv", str(venv))
+        python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        run(str(python), "-m", "pip", "install", str(core))
+        # Both wheels are currently minimal, independent scaffolds.
+        run(str(python), "-m", "pip", "install", "--no-deps", str(manim))
+        run(
+            str(python),
+            "-I",
+            "-c",
+            "from importlib.metadata import version; "
+            "import artifactspec, artifactspec_manim; "
+            "assert artifactspec.VERSION == version('artifactspec'); "
+            "assert artifactspec_manim.VERSION == version('artifactspec-manim'); "
+            "assert artifactspec.__all__ == ['VERSION']; "
+            "assert artifactspec_manim.__all__ == ['VERSION']",
+        )
+
+
+if __name__ == "__main__":
+    main()
