@@ -1,11 +1,11 @@
 ---
 id: ART-14
 title: Render a validated artifact through a registered backend
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 02:47'
-updated_date: '2026-11-08 16:51'
+updated_date: '2026-11-08 17:37'
 labels: []
 milestone: m-3
 dependencies:
@@ -41,5 +41,11 @@ The earlier text-video proof of concept was removed; the current version-only pa
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Opt-in basic plugin renders validated text and rectangles to SVG; BDD, unit, trust, atomic-failure and installed-wheel entry point tests pass locally. All task ACs are met for the approved static slice, but task remains In Progress while dependency ART-12 remains open. Report rendering, animation and Manim are not implemented.
+The opt-in trusted basic plugin renders validated text, rectangles and dated events as SVG with explicit backend selection, diagnostics, provenance and atomic replacement. End-to-end tests and wheel entry-point smoke tests pass; dependency ART-12 is now complete for the approved static slice. Report rendering, animation and Manim are not implemented.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Delivered the approved registered static SVG backend with actionable errors and atomic output. Verified with BDD, unit, CLI and installed-wheel tests; full local suite passed 287 tests.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -1,11 +1,11 @@
 ---
 id: ART-12
 title: Implement representation selection and artifact composition
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 02:47'
-updated_date: '2026-11-08 16:51'
+updated_date: '2026-11-08 17:37'
 labels: []
 milestone: m-3
 dependencies:
@@ -29,17 +29,23 @@ Content should be reused across artifact types without assuming one layout or re
 <!-- AC:BEGIN -->
 - [x] #1 A documented content model can select compatible representations and compose them for at least two supported outputs or forms.
 - [x] #2 Incompatible or unavailable representations fail explicitly or use a documented, visible fallback.
-- [ ] #3 Tests demonstrate semantic reuse and verify that content timeline semantics remain separate from animation playback.
+- [x] #3 Tests demonstrate semantic reuse and verify that content timeline semantics remain separate from animation playback.
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Define immutable output-independent semantic content and explicit compatible representation selection. 2. Exercise the same content in image and report compositions and reject unavailable representations. 3. Design and test domain timeline semantics separately from animation playback when that model is defined.
+1. Model built-in events using a strict ISO calendar date and label, preserving declaration order without animation playback semantics. 2. Add BDD and generated tests for same-content image/report composition, source links, invalid and missing fields, and explicit no-playback behavior. 3. Implement the trusted basic plugin extension, document its boundaries, and verify the package and quality gates. 4. Reassess ART-14 and ART-15 against their acceptance criteria.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Static image and report compositions reuse the same semantic content; missing/incompatible representations fail without fallback. AC 3 remains open: reuse is tested, but domain timeline semantics and playback are not implemented and cannot yet be verified.
+The approved basic event slice stores a strict ISO calendar date and a nonblank label as semantic node properties. Image and report compositions preserve declared event order, use distinct text forms, preserve source spans, and do not infer playback timing. Grouped and approximate dates, animation, and report rendering remain unsupported. Static validation does not execute plugin value checks.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and documented dated semantic events with explicit calendar validation and output-specific static composition. BDD, generated date and error tests, CLI SVG and installed-wheel smoke tests pass; the full local suite passed 287 tests with 96.66% coverage.
+<!-- SECTION:FINAL_SUMMARY:END -->

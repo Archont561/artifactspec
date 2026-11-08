@@ -16,9 +16,11 @@ def basic_manifest() -> dict[str, Any]:
             "phrases": [
                 {"name": "text", "outputs": [], "object_type": "text"},
                 {"name": "rectangle", "outputs": [], "object_type": "rectangle"},
+                {"name": "event", "outputs": [], "object_type": "event"},
             ],
             "properties": [
-                {"name": "value", "outputs": [], "target_types": ["text"]},
+                {"name": "value", "outputs": [], "target_types": ["text", "event"]},
+                {"name": "date", "outputs": [], "target_types": ["event"]},
                 {"name": "color", "outputs": [], "target_types": ["text", "rectangle"]},
             ],
             "representations": [{"name": "basic", "outputs": ["image", "report"]}],
