@@ -51,8 +51,8 @@ package source directories to `PYTHONPATH`, even from a subdirectory. Run
 `pixi run --locked install-projects` when work needs installed package metadata,
 and rerun it after changing metadata or recreating the Pixi environment.
 
-Manim is an optional PyPI dependency in the `manim` Pixi environment. After
-relocking, install it with `pixi install --locked -e manim` and use it with
+Manim is an optional PyPI dependency in the `manim` Pixi environment. Install
+it with `pixi install --locked -e manim` and use it with
 `pixi run --locked -e manim -x manim --version`. Its native ManimPango and
 PyCairo bindings and FFmpeg are supplied by conda-forge. This does not implement
 the ArtifactSpec renderer or make Manim a distribution dependency.

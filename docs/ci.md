@@ -74,7 +74,8 @@ consistency on pull requests and, for same-repository non-Dependabot branches,
 can commit a refreshed lock and dispatch CI. Fork and Dependabot PRs require a
 manual lock update with suitable permissions. The workflow does not publish a
 sandbox from a pull request. Review bot changes and require the repaired-head CI
-to pass; the bot has not yet been verified in this repository. Hatchling updates to 1.30
+to pass. The bot has refreshed a lock and dispatched CI in this repository;
+GitHub may require approval for PR workflows triggered by the bot's commit. Hatchling updates to 1.30
 or newer are temporarily ignored because the locked Twine 6.2 rejects the newer
 metadata. Upgrade and relock Twine, then verify package builds before removing
 that ignore. Existing incompatible Dependabot PRs will remain red until revised
@@ -114,4 +115,5 @@ the local Git repository), run `scripts/restore.sh`. Set
 run `pixi run --frozen install-projects` to install the local projects. GitHub
 Actions needs permission to write repository contents for the publisher;
 publishing is not attempted on pull requests. Both publishing and offline restore
-have succeeded, but the newly added Manim environment has not yet been verified.
+have succeeded. The optional Manim environment is checked separately in CI and
+is not included in the offline developer bundle.
