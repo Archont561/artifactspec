@@ -10,14 +10,15 @@ report renderer, arbitrary layout, or semantic values other than strings.
 
 Install the separately distributed `artifactspec-svg` plugin alongside
 `artifactspec` (for example, `python -m pip install artifactspec artifactspec-svg`
-once the distributions are available). The plugin provides the `svg` renderer; its SVG syntax
-serialization is separate from the renderer adapter and the core semantic
-content model. For the built-in generic content and representation, select
-`--builtin-basic`:
+once the distributions are available). Install `artifactspec-events` as well
+for the event statements below. SVG owns image text and rectangle syntax, their
+`diagram` layout, and the `svg` renderer. Events owns event syntax and its own
+`diagram` layout. The renderer consumes the shared composition model and does
+not interpret event semantics:
 
 ```sh
-artifactspec render scene.art --builtin-basic \
-  --representation basic --renderer svg --output scene.svg
+artifactspec render scene.art \
+  --representation diagram --renderer svg --output scene.svg
 ```
 
 For example, `scene.art` can contain:
@@ -31,7 +32,7 @@ Create rectangle named box.
 Set color of box to "#aabbcc".
 Create event named opening.
 Set date of opening to "1989-11-09".
-Set value of opening to "Berlin Wall opens".
+Set label of opening to "Berlin Wall opens".
 ```
 
 Rendering automatically imports every installed ArtifactSpec plugin by default,
@@ -41,14 +42,13 @@ renderer. Plugins are arbitrary Python and are **not sandboxed**. To load only
 selected plugins, pass `--no-plugin-autoload` and repeat `--plugin ID`:
 
 ```sh
-artifactspec render scene.art --builtin-basic --no-plugin-autoload \
-  --plugin svg --representation basic --renderer svg --output scene.svg
+artifactspec render scene.art --no-plugin-autoload \
+  --plugin svg --plugin events --representation diagram --renderer svg --output scene.svg
 ```
 
 With autoload disabled, no installed plugin executes unless explicitly named.
 Static discovery, validation, and the language server read installed manifests
-without importing plugin handlers. Use `--builtin-basic` with `capabilities`,
-`validate`, or `lsp` to add its static metadata. Runtime loading checks the
+without importing plugin handlers. Runtime loading checks the
 plugin declaration against its manifest, but this happens after import-time
 side effects. Manifest metadata does not establish that a plugin is safe.
 
@@ -57,7 +57,7 @@ diagnostics and operational errors go to stderr. Add `--format json` for
 machine-readable successes **and** failures:
 
 ```sh
-artifactspec render scene.art --builtin-basic --representation basic \
+artifactspec render scene.art --representation diagram \
   --renderer svg --output scene.svg --format json
 ```
 
@@ -113,14 +113,16 @@ perform factual review separately.
 these rather than importing private core implementations:
 
 - `PhraseContext` supplies the object name and optional source span and requires
-  exactly one `create(object_type)` call. For v2 plugins the created type must
-  equal the declared `object_type`.
+  exactly one `create(object_type)` call. The created type must equal the
+  declared `object_type`.
 - `PropertyContext` supplies the target name/type, decoded string value and
   source span. A handler must call `set(key, value)` at least once. Repeated
   assignments take effect in document order. Forward named references are
   resolved before property handlers run; `it` uses the validator's resolution.
-- `RepresentationContext` receives immutable `Content` and the requested
-  output. It emits static text or rectangles linked to named semantic nodes,
+- `RepresentationContext` receives immutable `Content`, the current `node`,
+  its zero-based declaration-order `index`, and the requested output. Core
+  dispatches each node to the selected representation's handler for that
+  semantic type. Handlers emit static text or rectangles linked to named nodes
   and can report limitations with `warn(message)`.
 - `RendererContext` receives an immutable `Composition`, may report limitations
   with `warn(message)`, and emits exactly one complete byte artifact with a
@@ -134,8 +136,8 @@ factories. The fake renderer holds bytes in memory; it does not write files.
 
 ## Calendar events and playback
 
-The opt-in basic plugin supports `event` objects with a required `date` and
-`value` (label). A date is a string in exactly `YYYY-MM-DD` format and must be
+The independent events plugin supports `event` objects with a required `date`
+and `label`. A date is a string in exactly `YYYY-MM-DD` format and must be
 valid in the proleptic Gregorian calendar, with years from 0001 through 9999.
 The label must contain a non-whitespace character. Values are preserved as
 semantic properties on the event node, along with source spans. Repeated
@@ -152,7 +154,7 @@ playback times. There is no separate timeline grouping, date range, approximate
 date, calendar conversion, or temporal arithmetic in this slice. Image output
 uses the existing fixed static layout, and report composition has no renderer.
 Animation and its scheduling and interpolation remain separate, future work;
-selecting the basic representation for animation fails explicitly.
+selecting the diagram representation for animation fails explicitly.
 
 ## Selection, output and limitations
 
@@ -167,8 +169,10 @@ historical timeline is not an animation timeline.
 `render` requires an explicit representation, renderer and destination. It
 checks both selections before running content handlers. The registry enforces declared output compatibility; missing or incompatible
 contributions and unsupported elements fail, with **no automatic fallback**.
-The basic representation supports text, rectangles, and dated events; the
-separate SVG renderer supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
+The SVG and events plugins each contribute `diagram` handlers for their own
+semantic types, so both can participate in one image composition. A missing
+handler for any node and output is an explicit error; for example, SVG shapes
+cannot be composed as a report. The SVG renderer supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
 text and reports this limitation; excess rows are rejected. The renderer allows
 a limited set of named colors or hexadecimal colors, rejects unsupported colors and
 characters forbidden in XML, and escapes text. It preserves editable SVG source,
@@ -181,5 +185,4 @@ leave a pre-existing destination unchanged and temporary files are cleaned up.
 This applies to the core's output operation, not to side effects that trusted
 plugin code may perform independently. The result aggregates source spans from
 emitted elements; provenance cannot assert that every detail is editable or
-visually faithful. Validation warnings (including legacy v1 unverified types)
-remain visible in the result.
+visually faithful. Validation warnings remain visible in the result.

@@ -19,12 +19,27 @@ def state():
 
 def prepare(state, installed_plugin_factory, tmp_path, text):
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
-        "properties": [{"name": "color", "outputs": [], "target_types": ["circle"]}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "circle",
+                "outputs": [],
+                "object_type": "circle",
+                "syntax": "Create circle named {name}.",
+            }
+        ],
+        "properties": [
+            {
+                "name": "circle-color",
+                "outputs": [],
+                "target_types": ["circle"],
+                "syntax": "Paint {reference} as {value}.",
+            }
+        ],
         "representations": [],
         "renderers": [],
     }
@@ -39,7 +54,7 @@ def valid_spec(state, installed_plugin_factory, tmp_path):
         state,
         installed_plugin_factory,
         tmp_path,
-        'Output image.\nCreate circle named c.\nSet color of c to "red".',
+        'Output image.\nCreate circle named c.\nPaint c as "red".',
     )
 
 
@@ -49,7 +64,7 @@ def invalid_spec(state, installed_plugin_factory, tmp_path):
         state,
         installed_plugin_factory,
         tmp_path,
-        'Output image.\nSet color of missing to "red".\nSet color of it to "blue".',
+        'Output image.\nPaint missing as "red".\nPaint it as "blue".',
     )
 
 

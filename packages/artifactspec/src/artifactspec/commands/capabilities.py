@@ -19,16 +19,10 @@ def show_capabilities(
     output: Annotated[
         str | None, typer.Option("--output", help="Filter by output name.")
     ] = None,
-    builtin_basic: Annotated[
-        bool,
-        typer.Option("--builtin-basic", help="Include static built-in capabilities."),
-    ] = False,
 ) -> None:
     """Discover installed plugin capabilities without loading plugin code."""
     try:
-        result = capabilities(
-            details=details, output=output, builtin_basic=builtin_basic
-        )
+        result = capabilities(details=details, output=output)
     except RegistrationError as exc:
         typer.echo(f"artifactspec: {exc}", err=True)
         raise typer.Exit(code=1) from exc

@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from artifactspec.core.models import Composition, Content
+from artifactspec.core.models import Composition, Content, ContentNode
 from artifactspec.core.syntax import SourceSpan
 
 
@@ -41,6 +41,12 @@ class RepresentationContext(Protocol):
 
     @property
     def content(self) -> Content: ...
+
+    @property
+    def node(self) -> ContentNode: ...
+
+    @property
+    def index(self) -> int: ...
 
     @property
     def output(self) -> str: ...

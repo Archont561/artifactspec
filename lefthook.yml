@@ -30,3 +30,5 @@ pre-push:
       run: pixi run --locked test-manim
     - name: svg-plugin-tests
       run: pixi run --locked test-svg
+    - name: event-plugin-tests
+      run: pixi run --locked test-events

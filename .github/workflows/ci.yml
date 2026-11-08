@@ -185,9 +185,9 @@ jobs:
       - name: Install core and test dependencies
         run: |
           python -m pip install -e "packages/artifactspec[dev]"
-          python -m pip install --no-deps packages/artifactspec-svg
+          python -m pip install --no-deps packages/artifactspec-svg packages/artifactspec-events
       - name: Test core package
-        run: python -m pytest packages/artifactspec/tests packages/artifactspec-svg/tests
+        run: python -m pytest packages/artifactspec/tests packages/artifactspec-svg/tests packages/artifactspec-events/tests
 
   ci-result:
     name: CI result

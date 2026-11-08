@@ -41,7 +41,7 @@ def fake_builds(monkeypatch, *, with_license):
 def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
     calls = fake_builds(monkeypatch, with_license=True)
     check_packages.main()
-    assert sum("build" in call for call in calls) == 3
+    assert sum("build" in call for call in calls) == 4
     assert any("twine" in call and "check" in call for call in calls)
     assert any("--no-deps" in call for call in calls)
     assert any("-I" in call and "-c" in call for call in calls)
@@ -74,7 +74,8 @@ def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
             and "--help" in call
             for call in calls
         )
-    assert sum("render" in call and "--builtin-basic" in call for call in calls) == 6
+    assert sum("render" in call and "--help" not in call for call in calls) == 7
+    assert not any("--builtin-basic" in call for call in calls)
     assert sum("render" in call and "--format" in call for call in calls) == 4
 
 

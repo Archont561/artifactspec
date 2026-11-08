@@ -44,9 +44,17 @@ class FakeRepresentationContext(RepresentationBuilder):
     """Record representation elements without invoking a renderer."""
 
     def __init__(
-        self, content: Content, output: str = "image", representation: str = "test"
+        self,
+        content: Content,
+        output: str = "image",
+        representation: str = "test",
+        *,
+        index: int = 0,
     ) -> None:
         super().__init__(content, output, representation)
+        self.index = index
+        if content.nodes:
+            self.node = content.nodes[index]
 
 
 class FakeRendererContext(RendererBuilder):

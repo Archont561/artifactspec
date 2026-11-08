@@ -43,7 +43,13 @@ def compose(
         raise TypeError("composition requires a trusted runtime Registry")
     context = RepresentationBuilder(content, output, representation)
     try:
-        registry.handler("representations", representation, output=output)(context)
+        registry.handler("representations", representation, output=output)
+        for index, node in enumerate(content.nodes):
+            context.node = node
+            context.index = index
+            registry.representation_handler(
+                representation, node.object_type, output=output
+            )(context)
     except Exception as exc:
         raise PipelineError(
             f"Representation {representation!r} failed for {output!r}: {exc}",

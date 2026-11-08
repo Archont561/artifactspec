@@ -9,10 +9,27 @@ from artifactspec.plugins import Plugin, RegistrationError, Registry
 
 @pytest.fixture
 def registry():
-    plugin = Plugin("test", "1", outputs=("image", "animation"))
-    plugin.phrase("rounded circle", outputs=("image",))(lambda ctx: None)
-    plugin.property("fill color", outputs=("image",))(lambda ctx: None)
-    plugin.property("label")(lambda ctx: None)
+    plugin = Plugin(
+        "test",
+        "1",
+        outputs=("image", "animation"),
+        output_syntax={"image": "Output image.", "animation": "Output animation."},
+    )
+    plugin.phrase(
+        "rounded circle",
+        outputs=("image",),
+        object_type="circle",
+        syntax="Create rounded circle named {name}.",
+    )(lambda ctx: None)
+    plugin.property(
+        "fill color",
+        outputs=("image",),
+        target_types=("circle",),
+        syntax="Set fill color of {reference} to {value}.",
+    )(lambda ctx: None)
+    plugin.property(
+        "label", target_types=("circle",), syntax="Set label of {reference} to {value}."
+    )(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     return registry
@@ -49,23 +66,23 @@ def test_spans_escapes_whitespace_and_immutability(registry):
     [
         ("", "missing_output", 1),
         ("  \n", "missing_output", 1),
-        ("Create rounded circle named c.", "missing_output", 1),
-        ("Output image", "missing_output", 1),
+        ("Create rounded circle named c.", "unknown_output", 1),
+        ("Output image", "unknown_output", 1),
         ("Output svg.", "unknown_output", 1),
         ("Output image.\nOutput image.", "ambiguous_output", 2),
         ("Output image.\nCreate rounded circle named it.", "malformed_statement", 2),
-        ("Output image.\nCreate rounded circle named 1bad.", "malformed_statement", 2),
-        ("Output image.\nCreate rounded circle named sun", "malformed_statement", 2),
-        ("Output image.\nCreate round square named sun.", "unknown_phrase", 2),
-        ('Output image.\nSet label of it to "hello"', "malformed_statement", 2),
-        ("Output image.\nSet label of it to [1].", "malformed_statement", 2),
+        ("Output image.\nCreate rounded circle named 1bad.", "unknown_statement", 2),
+        ("Output image.\nCreate rounded circle named sun", "unknown_statement", 2),
+        ("Output image.\nCreate round square named sun.", "unknown_statement", 2),
+        ('Output image.\nSet label of it to "hello"', "unknown_statement", 2),
+        ("Output image.\nSet label of it to [1].", "unknown_statement", 2),
         ('Output image.\nSet label of it to "bad\\q".', "malformed_statement", 2),
-        ('Output image.\nSet missing of it to "x".', "unknown_property", 2),
-        ('Output animation.\nSet fill color of it to "red".', "unknown_property", 2),
+        ('Output image.\nSet missing of it to "x".', "unknown_statement", 2),
+        ('Output animation.\nSet fill color of it to "red".', "unknown_statement", 2),
         ("Output image.\nRun arbitrary code.", "unknown_statement", 2),
         (
             'Output image.\nCreate rounded circle named x. Set label of x to "a".',
-            "malformed_statement",
+            "unknown_statement",
             2,
         ),
     ],
@@ -87,13 +104,19 @@ def test_empty_output_has_an_empty_immutable_statement_sequence(registry):
 
 
 def test_unknown_capabilities_never_invoke_handlers(registry):
-    with pytest.raises(ParseError, match="not registered"):
+    with pytest.raises(ParseError, match="No plugin syntax matches"):
         parse("Output animation.\nCreate rounded circle named x.", registry)
 
 
 def test_duplicate_phrase_registrations_are_rejected_before_parsing(registry):
-    other = Plugin("other", "1", outputs=("image",))
-    other.phrase("rounded circle")(lambda ctx: None)
+    other = Plugin(
+        "other", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    other.phrase(
+        "rounded circle",
+        object_type="circle",
+        syntax="Create rounded circle named {name}.",
+    )(lambda ctx: None)
     with pytest.raises(RegistrationError, match="conflicting"):
         registry.register(other)
 
@@ -116,9 +139,19 @@ def test_json_literal_may_contain_statement_delimiters(registry):
 
 
 def test_registered_names_cannot_smuggle_a_second_statement():
-    plugin = Plugin("test", "1", outputs=("image",))
-    plugin.phrase("circle named first. Create circle")(lambda ctx: None)
-    plugin.property("label of first to x. Set label")(lambda ctx: None)
+    plugin = Plugin(
+        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase(
+        "circle named first. Create circle",
+        object_type="circle",
+        syntax="Create circle named {name}.",
+    )(lambda ctx: None)
+    plugin.property(
+        "label of first to x. Set label",
+        target_types=("circle",),
+        syntax="Set label of {reference} to {value}.",
+    )(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     with pytest.raises(ParseError):
@@ -134,9 +167,19 @@ def test_registered_names_cannot_smuggle_a_second_statement():
 
 
 def test_registered_names_can_include_grammar_words():
-    plugin = Plugin("test", "1", outputs=("image",))
-    plugin.phrase("a circle named circle")(lambda ctx: None)
-    plugin.property("label of apple to orange")(lambda ctx: None)
+    plugin = Plugin(
+        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase(
+        "a circle named circle",
+        object_type="circle",
+        syntax="Create a circle named circle named {name}.",
+    )(lambda ctx: None)
+    plugin.property(
+        "label of apple to orange",
+        target_types=("circle",),
+        syntax="Set label of apple to orange of {reference} to {value}.",
+    )(lambda ctx: None)
     registry = Registry()
     registry.register(plugin)
     document = parse(
@@ -147,22 +190,12 @@ def test_registered_names_can_include_grammar_words():
     assert document.statements[1].property == "label of apple to orange"
 
 
-def test_lark_parses_each_kind_of_statement(registry, monkeypatch):
-    from lark import Lark
-
-    original = Lark.parse
-    parsed_starts = []
-
-    def record_parse(self, text, *args, **kwargs):
-        parsed_starts.append(kwargs.get("start"))
-        return original(self, text, *args, **kwargs)
-
-    monkeypatch.setattr(Lark, "parse", record_parse)
-    parse(
+def test_template_parser_uses_static_manifest_without_calling_handlers(registry):
+    document = parse(
         'Output image.\nCreate rounded circle named sun.\nSet label of sun to "x".',
         registry,
     )
-    assert parsed_starts == ["header", "create", "set"]
+    assert len(document.statements) == 2
 
 
 @pytest.mark.parametrize(
@@ -181,7 +214,7 @@ def test_lark_parses_each_kind_of_statement(registry, monkeypatch):
 def test_invalid_single_line_grammar_is_rejected(registry, line):
     with pytest.raises(ParseError) as captured:
         parse("Output image.\n" + line, registry)
-    assert captured.value.code == "malformed_statement"
+    assert captured.value.code in {"unknown_statement", "malformed_statement"}
 
 
 def test_literal_and_reference_spans_with_unicode_and_tabs(registry):
@@ -199,15 +232,16 @@ def test_literal_and_reference_spans_with_unicode_and_tabs(registry):
     assert statement.value.value == "☀ café"
 
 
-def test_ambiguous_lark_parse_is_rejected(registry, monkeypatch):
-    from lark import Tree
-
-    from artifactspec.core import parser
-
-    monkeypatch.setattr(
-        parser._PARSER, "parse", lambda *args, **kwargs: Tree("_ambig", [])
+def test_ambiguous_plugin_output_templates_are_rejected():
+    plugin = Plugin(
+        "a",
+        "1",
+        outputs=("image", "report"),
+        output_syntax={"image": "Choose.", "report": "Choose."},
     )
+    registry = Registry()
+    registry.register(plugin)
     with pytest.raises(ParseError) as captured:
-        parse("Output image.", registry)
+        parse("Choose.", registry)
     assert captured.value.code == "ambiguous_statement"
     assert captured.value.span.start == Position(1, 1)

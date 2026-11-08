@@ -14,7 +14,7 @@ import pytest
         "artifactspec.core.rendering",
         "artifactspec.core.validation",
         "artifactspec.plugins.discovery",
-        "artifactspec.plugins.basic",
+        "artifactspec.core.templates",
         "artifactspec.editor.lsp",
         "artifactspec.testing.pytest_plugin",
     ],

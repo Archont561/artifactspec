@@ -5,6 +5,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
+from artifactspec_events.plugin import plugin as event_plugin
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -12,14 +13,13 @@ from artifactspec.core.models import Content, ContentNode
 from artifactspec.core.pipeline import PipelineError, build_content
 from artifactspec.core.rendering import compose, render
 from artifactspec.plugins import Plugin, Registry
-from artifactspec.plugins.basic import basic_plugin
 
 pytest_plugins = ["artifactspec.testing.pytest_plugin"]
 
 
 def registry():
     result = Registry()
-    result.register(basic_plugin())
+    result.register(event_plugin)
     from artifactspec_svg.plugin import plugin as svg_plugin
 
     result.register(svg_plugin)
@@ -42,7 +42,7 @@ def test_svg_preserves_arbitrary_valid_text_and_escapes_markup(value):
         result = render(
             source,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=destination,
         )
@@ -52,7 +52,7 @@ def test_svg_preserves_arbitrary_valid_text_and_escapes_markup(value):
 
 
 @pytest.mark.parametrize(
-    "representation,renderer", [("missing", "svg"), ("basic", "missing")]
+    "representation,renderer", [("missing", "svg"), ("diagram", "missing")]
 )
 def test_missing_capability_does_not_replace_existing_file(
     tmp_path, representation, renderer
@@ -85,7 +85,7 @@ def test_unsafe_colors_are_rejected_without_replacing_output(tmp_path, value):
         render(
             spec,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=destination,
         )
@@ -99,7 +99,7 @@ def test_xml_forbidden_character_does_not_create_file(tmp_path):
         render(
             spec,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=destination,
         )
@@ -107,19 +107,17 @@ def test_xml_forbidden_character_does_not_create_file(tmp_path):
 
 
 def test_report_representation_does_not_claim_a_report_renderer(tmp_path):
-    spec = 'Output report.\nCreate text named x.\nSet value of x to "Hello".'
+    spec = 'Output report.\nCreate event named e.\nSet date of e to "2000-01-01".\nSet label of e to "Hello".'
     content = build_content(spec, registry())
-    assert (
-        compose(content, output="report", representation="basic", registry=registry())
-        .elements[0]
-        .text
-        == "Hello"
+    composition = compose(
+        content, output="report", representation="diagram", registry=registry()
     )
+    assert composition.elements[0].text == "2000-01-01: Hello"
     with pytest.raises(PipelineError, match="no renderers"):
         render(
             spec,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=tmp_path / "report",
         )
@@ -133,7 +131,9 @@ def test_missing_or_duplicate_artifacts_are_rejected(tmp_path):
             ctx.emit(b"y", media_type="text/plain", editable=True),
         ),
     ):
-        plugin = Plugin("custom", "1", outputs=("image",))
+        plugin = Plugin(
+            "custom", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        )
         plugin.renderer("custom", outputs=("image",))(handler)
         reg = registry()
         reg.register(plugin)
@@ -142,7 +142,7 @@ def test_missing_or_duplicate_artifacts_are_rejected(tmp_path):
             render(
                 "Output image.\nCreate text named t.",
                 reg,
-                representation="basic",
+                representation="diagram",
                 renderer="custom",
                 destination=destination,
             )
@@ -163,17 +163,16 @@ def test_fakes_record_representation_and_renderer_operations(
         rep.text("missing", "bad", x=1, y=2)
 
 
-def test_same_content_supports_distinct_image_and_report_compositions():
+def test_same_event_content_supports_distinct_image_and_report_compositions():
     reg = registry()
     content = build_content(
-        'Output image.\nCreate rectangle named x.\nCreate text named t.\nSet value of t to "Shared".',
+        'Output image.\nCreate event named e.\nSet date of e to "2000-01-01".\nSet label of e to "Shared".',
         reg,
     )
-    image = compose(content, output="image", representation="basic", registry=reg)
-    report = compose(content, output="report", representation="basic", registry=reg)
-    assert type(image.elements[0]).__name__ == "RectangleElement"
-    assert report.elements[0].text == "Rectangle (color: black)"
-    assert image.elements[1].text == report.elements[1].text == "Shared"
+    image = compose(content, output="image", representation="diagram", registry=reg)
+    report = compose(content, output="report", representation="diagram", registry=reg)
+    assert image.elements[0].text == "2000-01-01 — Shared"
+    assert report.elements[0].text == "2000-01-01: Shared"
     assert image.limitations and report.limitations
 
 
@@ -185,7 +184,7 @@ def test_basic_layout_overflow_is_explicit_and_preserves_destination(tmp_path):
         render(
             text,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=destination,
         )
@@ -198,7 +197,7 @@ def test_carriage_return_is_preserved_in_svg_text(tmp_path):
     result = render(
         text,
         registry(),
-        representation="basic",
+        representation="diagram",
         renderer="svg",
         destination=destination,
     )
@@ -212,7 +211,9 @@ def test_renderer_failure_after_emitting_does_not_replace_existing_file(tmp_path
         ctx.emit(b"partial", media_type="text/plain", editable=True)
         raise RuntimeError("broken")
 
-    plugin = Plugin("broken", "1", outputs=("image",))
+    plugin = Plugin(
+        "broken", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
     plugin.renderer("broken")(failing)
     reg = registry()
     reg.register(plugin)
@@ -222,7 +223,7 @@ def test_renderer_failure_after_emitting_does_not_replace_existing_file(tmp_path
         render(
             "Output image.\nCreate text named t.",
             reg,
-            representation="basic",
+            representation="diagram",
             renderer="broken",
             destination=destination,
         )
@@ -241,7 +242,7 @@ def test_atomic_write_failure_removes_temporary_file(tmp_path, monkeypatch):
         render(
             "Output image.\nCreate text named t.",
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=destination,
         )
@@ -254,7 +255,7 @@ def test_unsupported_semantic_properties_are_not_silently_dropped():
 
     content = Content((ContentNode("x", "text", (("size", "30"),), ()),))
     with pytest.raises(PipelineError, match="cannot express properties"):
-        compose(content, output="image", representation="basic", registry=registry())
+        compose(content, output="image", representation="diagram", registry=registry())
 
 
 def test_invalid_named_svg_color_fails_instead_of_silent_default(tmp_path):
@@ -263,7 +264,7 @@ def test_invalid_named_svg_color_fails_instead_of_silent_default(tmp_path):
         render(
             spec,
             registry(),
-            representation="basic",
+            representation="diagram",
             renderer="svg",
             destination=tmp_path / "x.svg",
         )
@@ -271,9 +272,18 @@ def test_invalid_named_svg_color_fails_instead_of_silent_default(tmp_path):
 
 def test_unavailable_renderer_is_rejected_before_plugin_handlers_run(tmp_path):
     called = []
-    plugin = Plugin("test-preflight", "1", outputs=("image",), schema_version=2)
-    plugin.phrase("item", object_type="item")(lambda ctx: called.append("phrase"))
-    plugin.representation("layout")(lambda ctx: called.append("representation"))
+    plugin = Plugin(
+        "test-preflight",
+        "1",
+        outputs=("image",),
+        output_syntax={"image": "Output image."},
+    )
+    plugin.phrase("item", object_type="item", syntax="Create item named {name}.")(
+        lambda ctx: called.append("phrase")
+    )
+    plugin.representation("layout", target_types=("item",))(
+        lambda ctx: called.append("representation")
+    )
     reg = Registry()
     reg.register(plugin)
     with pytest.raises(PipelineError, match="no renderers"):
@@ -291,7 +301,7 @@ def test_result_explicitly_reports_no_fallback(tmp_path):
     result = render(
         "Output image.\nCreate text named x.",
         registry(),
-        representation="basic",
+        representation="diagram",
         renderer="svg",
         destination=tmp_path / "x.svg",
     )

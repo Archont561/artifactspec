@@ -12,9 +12,15 @@ pytest_plugins = ["artifactspec.testing.pytest_plugin"]
 
 
 def make_registry(phrase, property_handler):
-    plugin = Plugin("test", "1", outputs=("image",), schema_version=2)
-    plugin.phrase("text", object_type="text")(phrase)
-    plugin.property("value", target_types=("text",))(property_handler)
+    plugin = Plugin(
+        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
+        phrase
+    )
+    plugin.property(
+        "value", target_types=("text",), syntax="Set value of {reference} to {value}."
+    )(property_handler)
     registry = Registry()
     registry.register(plugin)
     return registry

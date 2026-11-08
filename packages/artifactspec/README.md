@@ -6,15 +6,17 @@ automatically loads installed plugins, which are executable Python and are not
 sandboxed. Install only trusted plugins, or disable autoload to select them
 explicitly. The core also provides an output-aware parser and reference and
 declared-type validation, with a validation CLI and language server. Plugins can
-materialize semantic content, including dated calendar events. The optional
-`artifactspec-svg` distribution renders the small static SVG image slice.
+materialize semantic content. The optional `artifactspec-svg` distribution
+provides image syntax and SVG rendering; `artifactspec-events` provides dated
+event syntax and layouts. Core contains no built-in content plugin. Version 1
+and 2 plugin manifests must migrate to schema version 3.
 
 ```sh
 artifactspec capabilities
-artifactspec capabilities --builtin-basic --details --output image
-artifactspec validate scene.art --builtin-basic --format json
-artifactspec lsp --builtin-basic
-artifactspec render scene.art --builtin-basic --representation basic --renderer svg --output scene.svg
+artifactspec capabilities --details --output image
+artifactspec validate scene.art --format json
+artifactspec lsp
+artifactspec render scene.art --representation diagram --renderer svg --output scene.svg
 ```
 
 The package root exports `VERSION`, read from installed distribution metadata.

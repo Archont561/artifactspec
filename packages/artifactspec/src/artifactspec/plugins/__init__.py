@@ -44,18 +44,18 @@ def _declared_outputs(values: Iterable[str]) -> list[str]:
 
 def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str, Any]:
     """Validate and normalize a static or runtime manifest."""
-    if not isinstance(data, dict) or set(data) != {
-        "schema_version",
-        "id",
-        "version",
-        "outputs",
-        *KINDS,
-    }:
+    if not isinstance(data, dict):
+        raise RegistrationError("manifest must be an object using schema version 3")
+    version = data.get("schema_version")
+    if type(version) is not int or version != 3:
         raise RegistrationError(
-            "manifest must contain exactly schema_version, id, version, outputs and all capability lists"
+            "unsupported plugin manifest schema; migrate to schema version 3 with statement templates"
         )
-    if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2):
-        raise RegistrationError("unsupported manifest schema_version; expected 1 or 2")
+    fields = {"schema_version", "id", "version", "outputs", "output_syntax", *KINDS}
+    if set(data) != fields:
+        raise RegistrationError(
+            "schema version 3 manifest must contain exactly schema_version, id, version, outputs, output_syntax and all capability lists"
+        )
     schema_version = data["schema_version"]
     plugin_id = _name(data["id"], "plugin id")
     if not re.fullmatch(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*", plugin_id):
@@ -70,17 +70,53 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
         "version": _name(data["version"], "version"),
         "outputs": _outputs(data["outputs"], "outputs"),
     }
+    from artifactspec.core.templates import TemplateError, compile_template
+
+    syntax = data["output_syntax"]
+    if not isinstance(syntax, dict) or set(syntax) != set(result["outputs"]):
+        raise RegistrationError("output_syntax must map every output to a template")
+    for template in syntax.values():
+        try:
+            compile_template(template, set())
+        except TemplateError as exc:
+            raise RegistrationError(f"invalid output template: {exc}") from exc
+    result["output_syntax"] = dict(sorted(syntax.items()))
     for kind in KINDS:
         result[kind] = _normalize_entries(
-            data[kind], kind, schema_version, result["outputs"], plugin_id
+            data[kind], kind, result["outputs"], plugin_id
         )
     return result
+
+
+def _normalize_type_and_syntax(
+    contribution: dict[str, Any], item: dict[str, Any], kind: str
+) -> None:
+    if kind == "phrases":
+        contribution["object_type"] = _name(item["object_type"], "object type")
+    if kind == "properties":
+        target_types = _outputs(item["target_types"], "target types")
+        if not target_types:
+            raise RegistrationError("target types must not be empty")
+        contribution["target_types"] = target_types
+    if kind == "representations":
+        target_types = _outputs(item["target_types"], "target types")
+        if not target_types:
+            raise RegistrationError("representation target types must not be empty")
+        contribution["target_types"] = target_types
+    if kind in ("phrases", "properties"):
+        from artifactspec.core.templates import TemplateError, compile_template
+
+        expected = {"name"} if kind == "phrases" else {"reference", "value"}
+        try:
+            compile_template(item["syntax"], expected)
+        except TemplateError as exc:
+            raise RegistrationError(f"invalid {kind} template: {exc}") from exc
+        contribution["syntax"] = item["syntax"]
 
 
 def _normalize_entries(
     entries: Any,
     kind: str,
-    schema_version: int,
     plugin_outputs: list[str],
     plugin_id: str,
 ) -> list[dict[str, Any]]:
@@ -90,14 +126,16 @@ def _normalize_entries(
     seen = set()
     for item in entries:
         fields = {"name", "outputs"}
-        if schema_version == 2 and kind == "phrases":
+        if kind == "phrases":
             fields.add("object_type")
-        if schema_version == 2 and kind == "properties":
+        if kind == "properties":
+            fields.add("target_types")
+        if kind in ("phrases", "properties"):
+            fields.add("syntax")
+        if kind == "representations":
             fields.add("target_types")
         if not isinstance(item, dict) or set(item) != fields:
-            required = (
-                "name and outputs" if schema_version == 1 else ", ".join(sorted(fields))
-            )
+            required = ", ".join(sorted(fields))
             raise RegistrationError(f"each {kind} contribution must have {required}")
         name = _name(item["name"], f"{kind} name")
         if name in seen:
@@ -111,13 +149,7 @@ def _normalize_entries(
                 f"{kind} contribution {name!r} declares unsupported outputs"
             )
         contribution: dict[str, Any] = {"name": name, "outputs": outputs}
-        if schema_version == 2 and kind == "phrases":
-            contribution["object_type"] = _name(item["object_type"], "object type")
-        if schema_version == 2 and kind == "properties":
-            target_types = _outputs(item["target_types"], "target types")
-            if not target_types:
-                raise RegistrationError("target types must not be empty")
-            contribution["target_types"] = target_types
+        _normalize_type_and_syntax(contribution, item, kind)
         normalized.append(contribution)
     return sorted(normalized, key=lambda item: item["name"])
 
@@ -125,7 +157,7 @@ def _normalize_entries(
 def check_conflicts(manifests: Iterable[dict[str, Any]]) -> None:
     """Reject ambiguous identities and contributions deterministically."""
     ids: set[str] = set()
-    contributions: dict[tuple[str, str], str] = {}
+    contributions: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]] = {}
     for manifest in sorted(manifests, key=lambda item: item["id"]):
         plugin_id = manifest["id"]
         if plugin_id in ids:
@@ -134,11 +166,16 @@ def check_conflicts(manifests: Iterable[dict[str, Any]]) -> None:
         for kind in KINDS:
             for item in manifest[kind]:
                 key = kind, item["name"]
-                if key in contributions:
-                    raise RegistrationError(
-                        f"conflicting {kind} contribution {item['name']!r} from plugins {contributions[key]!r} and {plugin_id!r}"
-                    )
-                contributions[key] = plugin_id
+                previous = contributions.setdefault(key, [])
+                for previous_id, previous_item in previous:
+                    disjoint_types = kind == "representations" and not set(
+                        item["target_types"]
+                    ).intersection(previous_item["target_types"])
+                    if not disjoint_types:
+                        raise RegistrationError(
+                            f"conflicting {kind} contribution {item['name']!r} from plugins {previous_id!r} and {plugin_id!r}"
+                        )
+                previous.append((plugin_id, item))
 
 
 def filter_manifests(
@@ -152,6 +189,7 @@ def filter_manifests(
             if output not in item["outputs"]:
                 continue
             item["outputs"] = [output]
+            item["output_syntax"] = {output: item["output_syntax"][output]}
             for kind in KINDS:
                 item[kind] = [
                     entry
@@ -191,7 +229,8 @@ class Plugin:
         version: str,
         *,
         outputs: Iterable[str] = (),
-        schema_version: int = 1,
+        schema_version: int = 3,
+        output_syntax: dict[str, str] | None = None,
     ) -> None:
         self._data: dict[str, Any] = {
             "schema_version": schema_version,
@@ -200,6 +239,7 @@ class Plugin:
             "outputs": _declared_outputs(outputs),
             **{kind: [] for kind in KINDS},
         }
+        self._data["output_syntax"] = output_syntax if output_syntax is not None else {}
         self._data = validate_manifest(self._data)
         self._handlers: dict[tuple[str, str], Callable[..., Any]] = {}
         self._frozen = False
@@ -223,12 +263,36 @@ class Plugin:
         return decorate
 
     def phrase(
-        self, name: str, *, outputs: Iterable[str] = (), object_type: str | None = None
+        self,
+        name: str,
+        *,
+        outputs: Iterable[str] = (),
+        object_type: str | None = None,
+        syntax: str | None = None,
     ) -> Callable[[F], F]:
         metadata = {} if object_type is None else {"object_type": object_type}
+        if syntax is not None:
+            metadata["syntax"] = syntax
         return self._contribute("phrases", name, outputs, **metadata)
 
     def property(
+        self,
+        name: str,
+        *,
+        outputs: Iterable[str] = (),
+        target_types: Iterable[str] | None = None,
+        syntax: str | None = None,
+    ) -> Callable[[F], F]:
+        metadata: dict[str, Any] = (
+            {}
+            if target_types is None
+            else {"target_types": _declared_outputs(target_types)}
+        )
+        if syntax is not None:
+            metadata["syntax"] = syntax
+        return self._contribute("properties", name, outputs, **metadata)
+
+    def representation(
         self,
         name: str,
         *,
@@ -240,12 +304,7 @@ class Plugin:
             if target_types is None
             else {"target_types": _declared_outputs(target_types)}
         )
-        return self._contribute("properties", name, outputs, **metadata)
-
-    def representation(
-        self, name: str, *, outputs: Iterable[str] = ()
-    ) -> Callable[[F], F]:
-        return self._contribute("representations", name, outputs)
+        return self._contribute("representations", name, outputs, **metadata)
 
     def renderer(self, name: str, *, outputs: Iterable[str] = ()) -> Callable[[F], F]:
         return self._contribute("renderers", name, outputs)
@@ -283,6 +342,19 @@ class Registry:
                     return plugin._handlers[(kind, name)]
         raise RegistrationError(
             f"no {kind} contribution {name!r} compatible with output {output!r}"
+        )
+
+    def representation_handler(
+        self, name: str, object_type: str, *, output: str
+    ) -> Callable[..., Any]:
+        """Find the representation contribution for one semantic object."""
+        for plugin in self._plugins.values():
+            for manifest in filter_manifests([plugin.manifest()], output):
+                for item in manifest["representations"]:
+                    if item["name"] == name and object_type in item["target_types"]:
+                        return plugin._handlers[("representations", name)]
+        raise RegistrationError(
+            f"no representation {name!r} for object type {object_type!r} and output {output!r}"
         )
 
     def load_installed(self, plugin_id: str) -> None:

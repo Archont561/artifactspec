@@ -97,12 +97,6 @@ def render_command(
             help="Do not automatically execute installed plugin code.",
         ),
     ] = False,
-    builtin_basic: Annotated[
-        bool,
-        typer.Option(
-            "--builtin-basic", help="Trust and load the built-in basic plugin."
-        ),
-    ] = False,
     plugin: Annotated[
         list[str] | None,
         typer.Option(
@@ -114,10 +108,6 @@ def render_command(
     """Validate and render with installed plugins or explicitly selected plugins."""
     registry = Registry()
     try:
-        if builtin_basic:
-            from artifactspec.plugins.basic import basic_plugin
-
-            registry.register(basic_plugin())
         if no_plugin_autoload:
             for plugin_id in plugin or []:
                 registry.load_installed(plugin_id)

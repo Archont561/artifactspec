@@ -44,6 +44,8 @@ class PropertyBuilder:
 class RepresentationBuilder:
     def __init__(self, content: Content, output: str, representation: str) -> None:
         self.content = content
+        self.node: ContentNode
+        self.index = 0
         self.output = output
         self.representation = representation
         self.width = 640.0

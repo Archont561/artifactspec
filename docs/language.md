@@ -6,96 +6,41 @@ execute plugin handlers, infer facts, or guarantee that a renderer exists. The
 validation CLI and language server share semantic reference and type checks;
 a minimal static SVG rendering pipeline is available with the optional SVG plugin.
 
-## Implemented syntax
+## Plugin-defined syntax
 
-An input is a sequence of lines separated by LF, CRLF, or CR. Other Unicode
-line-separator characters do not start a new line and may appear in JSON strings.
-Blank lines are ignored; every nonblank line contains exactly one statement
-ending in a period. There are no comments,
-multiline statements, imports, nested scopes, or multiple statements on a line.
-Leading and trailing whitespace is ignored. Keywords and capability names are
-case-sensitive; spaces between syntactic components are required. Only the
-first nonblank statement may be an output header, and exactly one is required:
+The core does not reserve a content phrase, property statement, or output
+statement form. Installed plugins declare complete statement templates in
+static schema version 3 metadata. The core matches those templates without
+importing or calling plugin code; schema versions 1 and 2 must migrate.
+For example, with both the SVG and event plugins installed:
 
 ```text
 Output image.
-Create circle named sun.
-Set color of it to "yellow".
-Set label of sun to "Bright sun".
+Create text named title.
+Set value of title to "Welcome".
+Create event named opening.
+Set date of opening to "1989-11-09".
+Set label of opening to "Berlin Wall opens".
 ```
 
-`image` must be an output declared by an available plugin manifest or registry. Output
-names use the same ASCII identifier syntax as object names. `circle`
-is an exact registered phrase name, `color` and `label` are exact registered
-property names, and each must be compatible with that output. This uses the
-runtime `Registry` supplied by the caller, not undisclosed installed metadata;
-the parser neither loads plugins nor executes registered callables. An empty
-contribution output list applies to all outputs declared by its plugin. The
-registry rejects duplicate `(kind, name)` registrations before parsing with a
-`RegistrationError` identifying the conflicting plugins; that registry error has
-no document source span. A phrase unavailable for the output is reported like an
-unknown phrase, with the statement's source span.
+These specific statements are plugin declarations, not a universal grammar.
+Different plugins may declare different full forms. Templates use typed
+placeholders for object names, references and JSON string values; see
+[the plugin contract](plugins.md) for the exact metadata and matching rules.
+Each nonblank line must match exactly one output declaration or content
+statement. The first nonblank line selects the output, and later output
+statements are rejected. Line endings are LF, CRLF or CR; other Unicode line
+separators can occur inside JSON strings. Blank lines are ignored. Source lines
+are trimmed before matching, with no multiline or multiple statements per line.
 
-Each object name is an ASCII identifier: a letter followed by letters, digits,
-underscores, or hyphens. The lowercase word `it` is reserved. Property values in
-this subset are JSON strings, including JSON escapes; numbers, lists, booleans,
-and null are not supported. The `Create` and `Set` separators ` named `,
-` of ` and ` to ` are literal; the object-name and reference positions must be
-single identifiers. The quoted string must immediately follow ` to ` and must
-end immediately before the period. Phrase and property names in this subset are
-one or more ASCII letter, digit, underscore or hyphen words separated by single
-spaces; registry names outside that form cannot be expressed by this subset.
-The grammar below describes a stripped, nonblank line (`json-string` is a JSON
-string literal, not an arbitrary JSON value):
-
-```text
-header    = "Output " identifier "."
-create    = "Create " capability " named " identifier "."
-set       = "Set " capability " of " identifier " to " json-string "."
-statement = create | set
-```
-
-The header is first and unique; every remaining nonblank line is one statement.
-A period inside a JSON string is part of the value, not a statement boundary.
-If syntax can be split into more than one valid interpretation, parsing fails
-rather than choosing one. Unknown, unavailable, or malformed statements produce a
-`ParseError` with a source span and diagnostic code. More than one output header
-is rejected as ambiguous, not silently overwritten.
-
-The parser uses Lark to parse each nonblank line according to this grammar, then
-checks capabilities against the supplied registry and decodes JSON strings. Lark
-is a runtime dependency, not a plugin loader or semantic validator.
-
-`artifactspec.core.parser.parse(text, registry, source="...")` returns an immutable
-`Document` containing an output and typed `CreateStatement` and `SetStatement`
-nodes. Lines and columns are one-based Unicode code-point positions; span ends
-are exclusive. Spans carry the caller-provided source identifier. A parse failure
-returns no partial document. Diagnostic codes include `missing_output`,
-`unknown_output`, `ambiguous_output`, `malformed_statement`, `unknown_statement`,
-`unknown_phrase`, `unknown_property`, and `ambiguous_statement`. A diagnostic
-span covers the offending statement (or position 1:1 for an empty document).
-`Reference` nodes retain the original `it` or name, and `StringValue` retains the
-decoded JSON value and its literal source span.
-For example, with a previously approved and registered plugin:
-
-```python
-from artifactspec.core.parser import parse
-from artifactspec.plugins import Plugin, Registry
-
-plugin = Plugin("shapes", "1", outputs=("image",))
-plugin.phrase("circle")(lambda context: None)
-plugin.property("color")(lambda context: None)
-registry = Registry()
-registry.register(plugin)
-document = parse(
-    'Output image.\nCreate circle named sun.\nSet color of it to "yellow".',
-    registry,
-    source="sun.image",
-)
-```
-
-The registered handlers in this example are placeholders and are not run by
-`parse`; the separate rendering pipeline uses phase contexts when explicitly invoked.
+`artifactspec.core.parser.parse(text, catalog, source="...")` returns an
+immutable `Document` with typed creation and property nodes. Lines and columns
+are one-based Unicode code-point positions; span ends are exclusive. A failure
+returns no partial document. Diagnostics distinguish missing or unknown output,
+unknown or ambiguous statements, malformed string values, and repeated output
+declarations. Output selection and statements are matched only against static
+metadata; `parse` does not execute plugin handlers. Runtime rendering separately
+loads plugins according to the trust policy.
 
 ## Reference semantics
 
@@ -105,16 +50,15 @@ reference is resolved within its document against a unique definition; no other
 document or registry entry can satisfy it. Forward named references are allowed
 by this contract; resolution occurs only after the complete document is available.
 `it` denotes the most recently created object **before** the referring statement;
-`Set` and blank lines do not
+property statements and blank lines do not
 change it. It starts unset for each new document, and a use before any creation
 must produce a source-linked diagnostic, not guess. A new document resets `it`;
 the only output header must start the document, so it is not a nested scope.
 The parser preserves references; `artifactspec.core.validation.validate` checks these
 rules and returns a `ValidationResult` containing diagnostics and resolved
 references. Duplicate names, unresolved and ambiguous references are errors.
-Version 2 plugin metadata permits exact object-type checking for properties;
-legacy version 1 metadata produces `unverified_type` warnings rather than a
-false claim that the types were checked. A result is valid if it has no errors;
+Version 3 plugin metadata permits exact object-type checking for properties;
+legacy version 1 and 2 metadata must be migrated. A result is valid if it has no errors;
 warnings must still be reviewed. Validation does not execute plugin handlers or
 prove factual correctness, rendering support, or visual quality. Syntax errors
 currently stop parsing at the first error; multiple independent semantic errors
@@ -148,7 +92,7 @@ Provenance        = zero_or_more_source_spans
 An image composition has static placements and no playback; an animation
 composition needs an explicit playback model. These are not checks performed by
 the parser. The first implemented composition is static and supports text and
-rectangles; animation playback is not yet implemented. See `docs/rendering.md`
+rectangles through plugins; animation playback is not yet implemented. See `docs/rendering.md`
 for the current contract and limitations. Typed parse nodes only carry syntax
 and string literals; they are not these semantic types.
 
@@ -186,9 +130,7 @@ Diagnostics go to standard output; operational errors go to standard error.
 Multiple semantic errors are reported together, but syntax parsing currently
 stops at the first error. Installed capabilities are discovered from static
 manifests; the command does not load plugins or execute handlers. Legacy
-version 1 manifests produce warnings where type information is missing. Pass
-`--builtin-basic` to include the built-in static capabilities for validation
-without executing plugin handlers.
+version 1 and 2 manifests require migration to schema 3.
 
 ## Editor diagnostics
 
@@ -197,8 +139,7 @@ loads installed static manifests at startup, uses the same validator and
 validation codes as the CLI, and does not import plugin modules. Configure an
 LSP client to start that command for ArtifactSpec documents; the server does not
 register a file extension or install editor configuration. Restart it after
-installing or changing plugins so that it can rediscover their metadata. Use
-`artifactspec lsp --builtin-basic` to include the built-in static manifest.
+installing or changing plugins so that it can rediscover their metadata.
 
 The server validates on document open and change, and clears diagnostics on
 close. Both full and incremental changes are supported; LSP positions use the

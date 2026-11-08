@@ -18,13 +18,20 @@ def text_plugin(state):
     from artifactspec.core.contexts import PhraseContext, PropertyContext
     from artifactspec.plugins import Plugin, Registry
 
-    plugin = Plugin("example", "1", outputs=("image", "report"), schema_version=2)
+    plugin = Plugin(
+        "example",
+        "1",
+        outputs=("image", "report"),
+        output_syntax={"image": "Output image.", "report": "Output report."},
+    )
 
-    @plugin.phrase("text", object_type="text")
+    @plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
     def make_text(ctx: PhraseContext):
         ctx.create("text")
 
-    @plugin.property("value", target_types=("text",))
+    @plugin.property(
+        "value", target_types=("text",), syntax="Set value of {reference} to {value}."
+    )
     def set_value(ctx: PropertyContext):
         ctx.set("value", ctx.value)
 

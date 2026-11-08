@@ -12,14 +12,27 @@ from artifactspec.plugins import (
 
 @pytest.fixture
 def typed_registry():
-    plugin = Plugin("typed", "1", outputs=("image", "animation"), schema_version=2)
-    plugin.phrase("circle", object_type="circle", outputs=("image",))(
+    plugin = Plugin(
+        "typed",
+        "1",
+        outputs=("image", "animation"),
+        output_syntax={"image": "Output image.", "animation": "Output animation."},
+    )
+    plugin.phrase(
+        "circle",
+        object_type="circle",
+        outputs=("image",),
+        syntax="Create circle named {name}.",
+    )(lambda ctx: pytest.fail("executed"))
+    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
         lambda ctx: pytest.fail("executed")
     )
-    plugin.phrase("text", object_type="text")(lambda ctx: pytest.fail("executed"))
-    plugin.property("color", target_types=("circle",), outputs=("image",))(
-        lambda ctx: pytest.fail("executed")
-    )
+    plugin.property(
+        "color",
+        target_types=("circle",),
+        outputs=("image",),
+        syntax="Set color of {reference} to {value}.",
+    )(lambda ctx: pytest.fail("executed"))
     registry = Registry()
     registry.register(plugin)
     return registry
@@ -65,7 +78,7 @@ def test_invalid_type_and_unavailable_output(typed_registry):
     assert result.diagnostics[0].code == "wrong_type"
     assert result.diagnostics[0].span.source == "in.art"
     result = validate("Output animation.\nCreate circle named a.", typed_registry)
-    assert result.diagnostics[0].code == "unknown_phrase"
+    assert result.diagnostics[0].code == "unknown_statement"
     assert not result.valid
 
 
@@ -78,9 +91,9 @@ def test_static_catalog_validates_without_plugin_code(typed_registry):
     assert catalog.manifests(output="animation")[0]["phrases"][0]["name"] == "text"
 
 
-def test_version_two_metadata_is_required_and_preserved(typed_registry):
+def test_version_three_metadata_is_required_and_preserved(typed_registry):
     manifest = typed_registry.manifests()[0]
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["phrases"][0]["object_type"] == "circle"
     assert manifest["properties"][0]["target_types"] == ["circle"]
     broken = {**manifest, "phrases": [{"name": "circle", "outputs": []}]}
@@ -96,16 +109,10 @@ def test_version_two_metadata_is_required_and_preserved(typed_registry):
         Plugin("bad", "1", schema_version=2).phrase("x")(lambda ctx: None)
 
 
-def test_legacy_declarations_warn_even_without_properties():
-    plugin = Plugin("old", "1", outputs=("image",))
-    plugin.phrase("circle")(lambda ctx: None)
-    registry = Registry()
-    registry.register(plugin)
-    result = validate("Output image.\nCreate circle named c.", registry)
-    assert result.valid
-    assert [(item.code, item.severity) for item in result.diagnostics] == [
-        ("unverified_type", "warning")
-    ]
+@pytest.mark.parametrize("schema_version", [1, 2])
+def test_legacy_declarations_require_migration(schema_version):
+    with pytest.raises(RegistrationError, match="migrate to schema version 3"):
+        Plugin("old", "1", outputs=("image",), schema_version=schema_version)
 
 
 def test_catalog_rejects_conflicts_and_never_exposes_mutable_state(typed_registry):
@@ -121,14 +128,23 @@ def test_catalog_rejects_conflicts_and_never_exposes_mutable_state(typed_registr
 
 
 def test_typed_plugin_and_manifest_require_matching_metadata():
+    def plugin():
+        return Plugin(
+            "typed", "1", outputs=("image",), output_syntax={"image": "Output image."}
+        )
+
     with pytest.raises(RegistrationError, match="target_types"):
-        Plugin("typed", "1", schema_version=2).property("color")(lambda ctx: None)
-    with pytest.raises(RegistrationError, match="name and outputs"):
-        Plugin("legacy", "1").phrase("circle", object_type="circle")(lambda ctx: None)
-    with pytest.raises(RegistrationError, match="target types"):
-        Plugin("typed", "1", schema_version=2).property("color", target_types=())(
+        plugin().property("color", syntax="Set color of {reference} to {value}.")(
             lambda ctx: None
         )
+    with pytest.raises(RegistrationError, match="object_type"):
+        plugin().phrase("circle", syntax="Create circle named {name}.")(
+            lambda ctx: None
+        )
+    with pytest.raises(RegistrationError, match="target types"):
+        plugin().property(
+            "color", target_types=(), syntax="Set color of {reference} to {value}."
+        )(lambda ctx: None)
 
 
 def test_bad_syntax_returns_source_linked_error(typed_registry):
@@ -141,24 +157,41 @@ def test_bad_syntax_returns_source_linked_error(typed_registry):
     assert result.diagnostics[0].span.source == "bad.art"
 
 
-def test_installed_version_two_manifest_never_imports_plugin(
+def test_installed_version_three_manifest_never_imports_plugin(
     installed_plugin_factory, monkeypatch
 ):
     from artifactspec.plugins.discovery import installed_plugins
 
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
-        "properties": [{"name": "color", "outputs": [], "target_types": ["circle"]}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "circle",
+                "outputs": [],
+                "object_type": "circle",
+                "syntax": "Create circle named {name}.",
+            }
+        ],
+        "properties": [
+            {
+                "name": "color",
+                "outputs": [],
+                "target_types": ["circle"],
+                "syntax": "Set color of {reference} to {value}.",
+            }
+        ],
         "representations": [],
         "renderers": [],
     }
     fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    catalog = ManifestCatalog(item[1] for item in installed_plugins().values())
+    catalog = ManifestCatalog(
+        item[1] for item in installed_plugins(only={"example"}).values()
+    )
     result = validate(
         'Output image.\nCreate circle named c.\nSet color of c to "red".', catalog
     )
@@ -195,7 +228,7 @@ def test_validation_cli_human_and_json_diagnostics(
     path.write_text("Output image.\nCreate not-known named x.", encoding="utf-8")
     result = runner.invoke(cli.app, ["validate", str(path), "--format", "json"])
     assert result.exit_code == 1
-    assert json.loads(result.output)["diagnostics"][0]["code"] == "unknown_phrase"
+    assert json.loads(result.output)["diagnostics"][0]["code"] == "unknown_statement"
     path.write_text("Output image.\nCreate circle named x.", encoding="utf-8")
     result = runner.invoke(cli.app, ["validate", str(path)])
     assert result.exit_code == 0 and "valid" in result.output
@@ -213,23 +246,44 @@ def test_cli_reports_missing_file_without_fake_validation_result(tmp_path):
     assert "artifactspec:" in result.stderr
 
 
-def test_capability_json_v1_remains_stable_for_v2_plugins(
+def test_capability_json_v1_remains_stable_for_v3_plugins(
     installed_plugin_factory, monkeypatch
 ):
     from artifactspec.plugins.discovery import capabilities
 
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
-        "properties": [{"name": "color", "outputs": [], "target_types": ["circle"]}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "circle",
+                "outputs": [],
+                "object_type": "circle",
+                "syntax": "Create circle named {name}.",
+            }
+        ],
+        "properties": [
+            {
+                "name": "color",
+                "outputs": [],
+                "target_types": ["circle"],
+                "syntax": "Set color of {reference} to {value}.",
+            }
+        ],
         "representations": [],
         "renderers": [],
     }
     fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
+    from artifactspec.plugins import discovery
+
+    original = discovery.installed_plugins
+    monkeypatch.setattr(
+        discovery, "installed_plugins", lambda: original(only={"example"})
+    )
     item = capabilities(details=True)["plugins"][0]
     assert item["capabilities"]["phrases"] == [{"name": "circle", "outputs": []}]
     assert item["capabilities"]["properties"] == [{"name": "color", "outputs": []}]

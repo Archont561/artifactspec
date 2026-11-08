@@ -27,11 +27,11 @@ A manual run without a base checks commits since the default branch's merge base
 when run on another branch, or all reachable commits on the default branch. An
 unavailable change-scope comparison still runs full CI.
 
-Full CI runs coverage across all three packages and uploads `coverage.xml` with the
+Full CI runs coverage across all four packages and uploads `coverage.xml` with the
 Codecov action. Configure the `CODECOV_TOKEN` repository secret where required by
 Codecov. Fork pull requests still run coverage but skip the upload, since secrets
 are not generally available to them. The coverage.py configuration fails reports
-below 91% total line coverage across the three package source trees; the full CI job
+below 91% total line coverage across the four package source trees; the full CI job
 uses this same gate before upload. The separate core-only `coverage` task applies
 the threshold to the core package alone. Script tests are run, but script code is
 not included in this coverage figure. Coverage uses subprocess instrumentation to
@@ -55,7 +55,7 @@ pixi run actionlint
 python scripts/detect_changes.py --base BASE --head HEAD --event pull_request
 ```
 
-Full CI also runs mypy, builds and checks both distributions, runs a Python
+Full CI also runs mypy, builds and checks all four distributions, runs a Python
 dependency audit, and tests the core package on Python 3.11–3.14 across Linux,
 macOS, and Windows. These matrix jobs install with pip rather than Pixi. Full
 CI also imports Manim and checks FFmpeg in its optional Pixi environment. The

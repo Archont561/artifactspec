@@ -13,12 +13,12 @@ Feature: Parse controlled artifact specifications
   Scenario: Reject an unknown phrase with its source location
     Given an image circle phrase is registered
     When I parse a specification with an unregistered phrase
-    Then parsing fails with an unknown phrase diagnostic at line 2
+    Then parsing fails with an unknown statement diagnostic at line 2
 
   Scenario: Reject a malformed property value
     Given an image color property can be parsed
     When I parse a specification with a non-string property value
-    Then parsing fails with a malformed statement diagnostic at line 2
+    Then parsing fails with an unknown statement diagnostic at line 2
 
   Scenario: Reject ambiguous output declarations
     Given image and animation outputs are registered
@@ -28,4 +28,4 @@ Feature: Parse controlled artifact specifications
   Scenario: Reject a phrase unavailable for the selected output
     Given a circle phrase is registered only for image output
     When I parse an animation specification using an image-only phrase
-    Then parsing fails with an unknown phrase diagnostic at line 2
+    Then parsing fails with an unknown statement diagnostic at line 2

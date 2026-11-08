@@ -10,8 +10,9 @@ content, representations, composition, and rendering.
 
 **Current status:** the core provides plugin registration, static capability
 discovery, parsing, validation, editor diagnostics, and a rendering pipeline.
-The optional `artifactspec-svg` distribution renders static SVG; the Manim
-distribution remains a version-only placeholder. Package roots expose `VERSION`
+The optional `artifactspec-svg` distribution supplies image syntax and static SVG
+rendering; `artifactspec-events` independently supplies dated-event syntax and
+layouts. Both compose in one diagram. The Manim distribution remains a version-only placeholder. Package roots expose `VERSION`
 from distribution metadata.
 
 Run `artifactspec capabilities --details` to inspect installed plugin metadata
@@ -30,7 +31,9 @@ module imports are not retained. Update imports when upgrading.
 
 - [`packages/artifactspec`](packages/artifactspec/README.md) — core package.
 - [`packages/artifactspec-svg`](packages/artifactspec-svg/README.md) — optional
-  static SVG renderer plugin.
+  image syntax, layout, and static SVG renderer plugin.
+- [`packages/artifactspec-events`](packages/artifactspec-events/README.md) —
+  independent dated-event syntax and layout plugin.
 - [`packages/artifactspec-manim`](packages/artifactspec-manim/README.md) —
   renderer placeholder; it has no Manim dependency.
 - [`backlog`](backlog/README.md) — product specification, decisions, milestones,
@@ -53,11 +56,12 @@ pixi run --locked install-projects
 pixi run --locked test
 pixi run --locked test-manim
 pixi run --locked test-svg
+pixi run --locked test-events
 pixi run --locked test-scripts
 pixi run --locked coverage-all
 ```
 
-The full coverage task requires at least **91% total line coverage** across all three
+The full coverage task requires at least **91% total line coverage** across all four
 package source trees. The number does not measure scripts or prove visual correctness. See
 [CI](docs/ci.md) for the full check matrix and coverage scope.
 

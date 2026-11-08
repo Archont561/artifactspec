@@ -10,7 +10,7 @@ Feature: Validate controlled artifact references
     When I validate a color property on a text object
     Then validation reports a wrong type at the reference
 
-  Scenario: Warn when legacy metadata cannot establish types
+  Scenario: Reject legacy metadata without templates
     Given a legacy plugin without type metadata
-    When I validate a legacy specification
-    Then validation warns that the property type is unverified
+    When I inspect its manifest
+    Then the plugin must be migrated to the current schema

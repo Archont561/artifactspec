@@ -24,7 +24,7 @@ def test_render_requires_explicit_known_plugins(tmp_path, extra, expected):
             "--output",
             str(dest),
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             *extra,
@@ -48,10 +48,9 @@ def test_cli_reports_validation_errors_and_leaves_old_artifact(tmp_path):
             "--output",
             str(dest),
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
-            "--builtin-basic",
         ],
     )
     assert result.exit_code == 1
@@ -68,10 +67,9 @@ def test_cli_reports_render_failure_and_missing_input(tmp_path):
         "--output",
         str(destination),
         "--representation",
-        "basic",
+        "diagram",
         "--renderer",
         "svg",
-        "--builtin-basic",
     ]
     missing = CliRunner().invoke(app, args)
     assert missing.exit_code == 2
@@ -97,10 +95,9 @@ def test_cli_result_surfaces_layout_limitations(tmp_path):
             "--output",
             str(destination),
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
-            "--builtin-basic",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -111,32 +108,52 @@ def test_cli_loads_only_explicitly_approved_installed_plugin(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "text", "outputs": [], "object_type": "text"}],
-        "properties": [{"name": "value", "outputs": [], "target_types": ["text"]}],
-        "representations": [{"name": "external", "outputs": []}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "text",
+                "outputs": [],
+                "object_type": "text",
+                "syntax": "Create text named {name}.",
+            }
+        ],
+        "properties": [
+            {
+                "name": "value",
+                "outputs": [],
+                "target_types": ["text"],
+                "syntax": "Set value of {reference} to {value}.",
+            }
+        ],
+        "representations": [
+            {"name": "external", "outputs": [], "target_types": ["text"]}
+        ],
         "renderers": [{"name": "external-svg", "outputs": []}],
     }
     marker = tmp_path / "executed"
     source_code = f"""from pathlib import Path
 Path({str(marker)!r}).write_text("loaded")
 from artifactspec.plugins import Plugin
-from artifactspec_svg.renderer import render_svg as _svg
-plugin = Plugin("example", "1.0", outputs=("image",), schema_version=2)
-@plugin.phrase("text", object_type="text")
+from html import escape
+plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={{"image": "Output image."}})
+@plugin.phrase("text", object_type="text", syntax="Create text named {{name}}.")
 def create(ctx):
     ctx.create("text")
-@plugin.property("value", target_types=("text",))
+@plugin.property("value", target_types=("text",), syntax="Set value of {{reference}} to {{value}}.")
 def apply(ctx):
     ctx.set("value", ctx.value)
-@plugin.representation("external")
+@plugin.representation("external", target_types=("text",))
 def layout(ctx):
     for node in ctx.content.nodes:
         ctx.text(node.name, dict(node.properties)["value"], x=5, y=20)
-plugin.renderer("external-svg")(_svg)
+@plugin.renderer("external-svg")
+def render(ctx):
+    text = escape(ctx.composition.elements[0].text)
+    ctx.emit(f"<svg>{{text}}</svg>".encode(), media_type="image/svg+xml", editable=True)
 """
     fixture = installed_plugin_factory(manifest=manifest, module_source=source_code)
     monkeypatch.syspath_prepend(str(fixture["path"]))
@@ -166,37 +183,22 @@ plugin.renderer("external-svg")(_svg)
     assert "External" in destination.read_text(encoding="utf-8")
 
 
-def test_builtin_capabilities_and_validation_use_static_metadata(tmp_path, monkeypatch):
-    import sys
-
-    monkeypatch.delitem(sys.modules, "artifactspec.plugins.basic", raising=False)
-    caps = CliRunner().invoke(
-        app, ["capabilities", "--builtin-basic", "--details", "--output", "image"]
-    )
+def test_installed_capabilities_and_validation_use_static_metadata(tmp_path):
+    caps = CliRunner().invoke(app, ["capabilities", "--details", "--output", "image"])
     assert caps.exit_code == 0, caps.output
-    plugins = json.loads(caps.output)["plugins"]
-    assert any(plugin["id"] == "builtin-basic" for plugin in plugins)
+    assert any(item["id"] == "svg" for item in json.loads(caps.output)["plugins"])
     source = tmp_path / "source.art"
     source.write_text(
         'Output image.\nCreate text named t.\nSet value of t to "hello".',
         encoding="utf-8",
     )
-    result = CliRunner().invoke(
-        app, ["validate", str(source), "--builtin-basic", "--format", "json"]
-    )
+    result = CliRunner().invoke(app, ["validate", str(source), "--format", "json"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["valid"] is True
-    assert "artifactspec.plugins.basic" not in sys.modules
+    assert json.loads(result.stdout)["valid"]
+    assert CliRunner().invoke(app, ["capabilities", "--builtin-basic"]).exit_code != 0
 
 
-def test_builtin_static_metadata_matches_runtime_plugin():
-    from artifactspec.plugins._basic_metadata import basic_manifest
-    from artifactspec.plugins.basic import basic_plugin
-
-    assert basic_manifest() == basic_plugin().manifest()
-
-
-def test_cli_reports_legacy_warnings_and_explicit_no_fallback(
+def test_legacy_plugin_is_rejected_without_executing_code(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
@@ -204,53 +206,32 @@ def test_cli_reports_legacy_warnings_and_explicit_no_fallback(
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "text", "outputs": []}],
-        "properties": [{"name": "value", "outputs": []}],
-        "representations": [{"name": "legacy", "outputs": []}],
-        "renderers": [{"name": "legacy-svg", "outputs": []}],
+        "phrases": [],
+        "properties": [],
+        "representations": [],
+        "renderers": [],
     }
-    source_code = """from artifactspec.plugins import Plugin
-from artifactspec_svg.renderer import render_svg as _svg
-plugin = Plugin("example", "1.0", outputs=("image",))
-@plugin.phrase("text")
-def create(ctx):
-    ctx.create("text")
-@plugin.property("value")
-def assign(ctx):
-    ctx.set("value", ctx.value)
-@plugin.representation("legacy")
-def layout(ctx):
-    for node in ctx.content.nodes:
-        ctx.text(node.name, dict(node.properties)["value"], x=5, y=20)
-plugin.renderer("legacy-svg")(_svg)
-"""
-    fixture = installed_plugin_factory(manifest=manifest, module_source=source_code)
+    fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"
-    source.write_text(
-        'Output image.\nCreate text named t.\nSet value of t to "hello".',
-        encoding="utf-8",
-    )
+    source.write_text("Output image.", encoding="utf-8")
     result = CliRunner().invoke(
         app,
         [
             "render",
             str(source),
-            "--plugin",
-            "example",
             "--representation",
-            "legacy",
+            "diagram",
             "--renderer",
-            "legacy-svg",
+            "svg",
             "--output",
-            str(tmp_path / "image.svg"),
+            str(tmp_path / "out.svg"),
+            "--format",
+            "json",
         ],
     )
-    assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
-    assert (data["renderer"], data["representation"], data["fallback"]) == (
-        "legacy-svg",
-        "legacy",
-        None,
+    assert result.exit_code == 2
+    assert (
+        "migrate to schema version 3" in json.loads(result.stdout)["error"]["message"]
     )
-    assert any(warning["code"] == "unverified_type" for warning in data["warnings"])
+    assert not fixture["marker"].exists()
