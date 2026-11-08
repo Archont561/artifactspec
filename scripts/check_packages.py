@@ -34,7 +34,12 @@ def check_json(*args: str, status: str, exit_code: int, error_code: str = "") ->
 
 def _build_distributions(root: Path) -> list[Path]:
     outputs = root / "distributions"
-    for package in ("artifactspec", "artifactspec-manim", "artifactspec-svg"):
+    for package in (
+        "artifactspec",
+        "artifactspec-manim",
+        "artifactspec-svg",
+        "artifactspec-events",
+    ):
         run(
             sys.executable,
             "-m",
@@ -44,7 +49,7 @@ def _build_distributions(root: Path) -> list[Path]:
             str(outputs),
         )
     files = sorted(outputs.iterdir())
-    if len(files) != 6:
+    if len(files) != 8:
         raise RuntimeError("Expected one wheel and one sdist per distribution")
     run(sys.executable, "-m", "twine", "check", *(str(path) for path in files))
     wheels = sorted(outputs.glob("*.whl"))
@@ -62,6 +67,9 @@ def _install_wheels(root: Path, wheels: list[Path]) -> tuple[Path, Path]:
     core = next(path for path in wheels if path.name.startswith("artifactspec-"))
     manim = next(path for path in wheels if path.name.startswith("artifactspec_manim-"))
     svg = next(path for path in wheels if path.name.startswith("artifactspec_svg-"))
+    events = next(
+        path for path in wheels if path.name.startswith("artifactspec_events-")
+    )
     venv = root / "venv"
     run(sys.executable, "-m", "venv", str(venv))
     python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -71,10 +79,24 @@ def _install_wheels(root: Path, wheels: list[Path]) -> tuple[Path, Path]:
         "-I",
         "-c",
         "from artifactspec.plugins.discovery import installed_plugins; "
-        "assert 'svg' not in installed_plugins()",
+        "assert installed_plugins() == {}",
     )
-    # The optional Manim placeholder and SVG plugin remain independent distributions.
+    # These optional packages remain independent distributions.
     run(str(python), "-m", "pip", "install", "--no-deps", str(manim))
+    run(str(python), "-m", "pip", "install", "--no-deps", str(events))
+    run(
+        str(python),
+        "-I",
+        "-c",
+        "from artifactspec.plugins.discovery import installed_plugins; "
+        "assert set(installed_plugins()) == {'events'}; "
+        "from artifactspec.plugins import Registry; "
+        "from artifactspec.core.pipeline import build_content; "
+        "from artifactspec.core.rendering import compose; "
+        "registry = Registry(); registry.load_installed('events'); "
+        'content = build_content(\'Output report.\\nCreate event named e.\\nSet date of e to "2000-01-01".\\nSet label of e to "milestone".\', registry); '
+        "assert compose(content, output='report', representation='diagram', registry=registry).elements[0].text == '2000-01-01: milestone'",
+    )
     run(str(python), "-m", "pip", "install", "--no-deps", str(svg))
     console = venv / (
         "Scripts/artifactspec.exe" if os.name == "nt" else "bin/artifactspec"
@@ -96,9 +118,8 @@ def _check_render_json(entry: tuple[str, ...], source: Path, destination: Path) 
         *entry,
         "render",
         str(source),
-        "--builtin-basic",
         "--representation",
-        "basic",
+        "diagram",
         "--renderer",
         "svg",
         "--output",
@@ -114,9 +135,8 @@ def _check_render_json(entry: tuple[str, ...], source: Path, destination: Path) 
         *entry,
         "render",
         str(bad_source),
-        "--builtin-basic",
         "--representation",
-        "basic",
+        "diagram",
         "--renderer",
         "svg",
         "--output",
@@ -130,11 +150,30 @@ def _check_render_json(entry: tuple[str, ...], source: Path, destination: Path) 
 
 
 def _check_render(root: Path, python: Path, console: Path) -> None:
+    svg_source = root / "svg-only.art"
+    svg_source.write_text(
+        'Output image.\nCreate text named title.\nSet value of title to "SVG only".',
+        encoding="utf-8",
+    )
+    run(
+        str(console),
+        "render",
+        str(svg_source),
+        "--no-plugin-autoload",
+        "--plugin",
+        "svg",
+        "--representation",
+        "diagram",
+        "--renderer",
+        "svg",
+        "--output",
+        str(root / "svg-only.svg"),
+    )
     source = root / "scene.art"
     source.write_text(
         'Output image.\nCreate text named title.\nSet value of title to "wheel smoke".\n'
         'Create event named launch.\nSet date of launch to "2000-01-01".\n'
-        'Set value of launch to "milestone".',
+        'Set label of launch to "milestone".',
         encoding="utf-8",
     )
     for index, entry in enumerate(
@@ -145,9 +184,8 @@ def _check_render(root: Path, python: Path, console: Path) -> None:
             *entry,
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -171,18 +209,20 @@ def _check_api(python: Path) -> None:
         "-I",
         "-c",
         "from importlib.metadata import version; "
-        "import artifactspec, artifactspec_manim, artifactspec_svg; "
+        "import artifactspec, artifactspec_manim, artifactspec_svg, artifactspec_events; "
         "assert artifactspec.VERSION == version('artifactspec'); "
         "assert artifactspec_manim.VERSION == version('artifactspec-manim'); "
         "assert artifactspec_svg.VERSION == version('artifactspec-svg'); "
+        "assert artifactspec_events.VERSION == version('artifactspec-events'); "
         "assert artifactspec.__all__ == ['VERSION']; "
         "assert artifactspec_manim.__all__ == ['VERSION']; "
         "assert artifactspec_svg.__all__ == ['VERSION']; "
+        "assert artifactspec_events.__all__ == ['VERSION']; "
         "from artifactspec.core.parser import parse; "
         "from artifactspec.plugins import Plugin, Registry; "
-        "plugin = Plugin('example', '1', outputs=('image',)); "
-        "plugin.phrase('circle')(lambda context: None); "
-        "plugin.property('label')(lambda context: None); "
+        "plugin = Plugin('example', '1', outputs=('image',), output_syntax={'image': 'Output image.'}); "
+        "plugin.phrase('circle', object_type='circle', syntax='Create circle named {name}.')(lambda context: None); "
+        "plugin.property('label', target_types=('circle',), syntax='Set label of {reference} to {value}.')(lambda context: None); "
         "registry = Registry(); registry.register(plugin); "
         "document = parse('Output image.\\nCreate circle named sun.\\n"
         'Set label of sun to \\"hello\\".\', registry); '

@@ -29,11 +29,15 @@ value_text = st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_s
 
 
 def typed_catalog():
-    plugin = Plugin("shapes", "1", outputs=("image",), schema_version=2)
-    plugin.phrase("circle", object_type="circle")(lambda context: pytest.fail("called"))
-    plugin.property("label", target_types=("circle",))(
+    plugin = Plugin(
+        "shapes", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase("circle", object_type="circle", syntax="Create circle named {name}.")(
         lambda context: pytest.fail("called")
     )
+    plugin.property(
+        "label", target_types=("circle",), syntax="Set label of {reference} to {value}."
+    )(lambda context: pytest.fail("called"))
     return ManifestCatalog([plugin.manifest()])
 
 
@@ -105,10 +109,11 @@ def test_unsupported_output_never_silently_parses(name):
 @given(outputs=st.lists(identifier, unique=True, max_size=8))
 def test_manifest_normalization_is_idempotent_and_filter_independent(outputs):
     data = {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "example",
         "version": "1",
         "outputs": outputs,
+        "output_syntax": {output: f"Output {output}." for output in outputs},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -127,10 +132,11 @@ def test_manifest_normalization_is_idempotent_and_filter_independent(outputs):
 @given(output=identifier)
 def test_duplicate_outputs_and_plugin_id_conflicts_are_rejected(output):
     data = {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "example",
         "version": "1",
         "outputs": [output, output],
+        "output_syntax": {output: f"Output {output}."},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -146,9 +152,17 @@ def test_duplicate_outputs_and_plugin_id_conflicts_are_rejected(output):
 @settings(deadline=None)
 @given(object_type=identifier, target_type=identifier)
 def test_declared_types_are_matched_exactly(object_type, target_type):
-    plugin = Plugin("typed", "1", outputs=("image",), schema_version=2)
-    plugin.phrase("thing", object_type=object_type)(lambda ctx: None)
-    plugin.property("label", target_types=(target_type,))(lambda ctx: None)
+    plugin = Plugin(
+        "typed", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase(
+        "thing", object_type=object_type, syntax="Create thing named {name}."
+    )(lambda ctx: None)
+    plugin.property(
+        "label",
+        target_types=(target_type,),
+        syntax="Set label of {reference} to {value}.",
+    )(lambda ctx: None)
     result = validate(
         'Output image.\nCreate thing named x.\nSet label of x to "x".',
         ManifestCatalog([plugin.manifest()]),
@@ -185,11 +199,19 @@ def test_capability_discovery_matches_filtered_static_metadata(
     from artifactspec.plugins import discovery
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "example",
         "version": "1",
         "outputs": outputs,
-        "phrases": [{"name": "circle", "outputs": []}],
+        "output_syntax": {output: f"Output {output}." for output in outputs},
+        "phrases": [
+            {
+                "name": "circle",
+                "outputs": [],
+                "object_type": "circle",
+                "syntax": "Create circle named {name}.",
+            }
+        ],
         "properties": [],
         "representations": [],
         "renderers": [],

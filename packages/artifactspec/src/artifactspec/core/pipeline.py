@@ -54,7 +54,7 @@ def _create_nodes(
     document: Document, registry: Registry, source: str
 ) -> dict[str, ContentNode]:
     declared = {
-        item["name"]: item.get("object_type")
+        item["name"]: item["object_type"]
         for manifest in registry.manifests(output=document.output)
         for item in manifest["phrases"]
     }
@@ -70,10 +70,7 @@ def _create_nodes(
             if context.object_type is None:
                 raise ValueError("phrase must create exactly one object")
             object_type = context.object_type
-            if (
-                declared[statement.phrase] is not None
-                and declared[statement.phrase] != object_type
-            ):
+            if declared[statement.phrase] != object_type:
                 raise ValueError("created type does not match declared object_type")
         except Exception as exc:
             raise PipelineError(

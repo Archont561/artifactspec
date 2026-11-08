@@ -87,7 +87,7 @@ The coverage gate requires at least 91% total line coverage across the three
 package source trees. It does not include repository scripts, native code, or
 external programs; see [CI](docs/ci.md) for scope, conditional jobs, and Codecov
 behavior. Package builds and dependency auditing need network access. For a
-focused run, use `pixi run --locked test`, `test-manim`, `test-svg`, or `test-scripts`.
+focused run, use `pixi run --locked test`, `test-manim`, `test-svg`, `test-events`, or `test-scripts`.
 
 ## Pull requests
 

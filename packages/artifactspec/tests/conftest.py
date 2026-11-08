@@ -25,11 +25,19 @@ def installed_plugin_factory(tmp_path):
         )
         (package / "__init__.py").write_text(source, encoding="utf-8")
         manifest = manifest or {
-            "schema_version": 1,
+            "schema_version": 3,
             "id": plugin_id,
             "version": "1.0",
             "outputs": ["pdf", "svg"],
-            "phrases": [{"name": "draw", "outputs": ["svg"]}],
+            "output_syntax": {"pdf": "Output pdf.", "svg": "Output svg."},
+            "phrases": [
+                {
+                    "name": "draw",
+                    "outputs": ["svg"],
+                    "object_type": "draw",
+                    "syntax": "Draw {name}.",
+                }
+            ],
             "properties": [],
             "representations": [],
             "renderers": [],

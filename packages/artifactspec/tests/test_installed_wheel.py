@@ -16,10 +16,11 @@ def test_installed_wheel_manifest_is_discovered_without_importing(tmp_path):
         encoding="utf-8",
     )
     manifest = {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "wheel-example",
         "version": "2",
         "outputs": ["svg"],
+        "output_syntax": {"svg": "Output svg."},
         "phrases": [],
         "properties": [],
         "representations": [],

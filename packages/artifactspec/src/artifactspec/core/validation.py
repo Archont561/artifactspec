@@ -86,15 +86,8 @@ def _resolve(
 
 
 def _check_type(
-    statement: SetStatement, object_type: str | None, accepted: list[str] | None
+    statement: SetStatement, object_type: str, accepted: list[str]
 ) -> Diagnostic | None:
-    if object_type is None or accepted is None:
-        return Diagnostic(
-            "unverified_type",
-            "warning",
-            f"Cannot check property {statement.property!r}: plugin type metadata is missing.",
-            statement.reference.span,
-        )
     if object_type not in accepted:
         return Diagnostic(
             "wrong_type",
@@ -107,19 +100,9 @@ def _check_type(
 
 def _declaration_diagnostics(
     statement: CreateStatement,
-    phrase_types: dict[str, str | None],
     definitions: dict[str, list[CreateStatement]],
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    if phrase_types[statement.phrase] is None:
-        diagnostics.append(
-            Diagnostic(
-                "unverified_type",
-                "warning",
-                f"Object {statement.name!r} has no declared type; plugin type metadata is missing.",
-                statement.span,
-            )
-        )
     if len(definitions[statement.name]) > 1:
         diagnostics.append(
             Diagnostic(
@@ -137,12 +120,12 @@ def _semantic_checks(
 ) -> ValidationResult:
     manifests = registry.manifests(output=document.output)
     phrase_types = {
-        item["name"]: item.get("object_type")
+        item["name"]: item["object_type"]
         for manifest in manifests
         for item in manifest["phrases"]
     }
     property_types = {
-        item["name"]: item.get("target_types")
+        item["name"]: item["target_types"]
         for manifest in manifests
         for item in manifest["properties"]
     }
@@ -152,9 +135,7 @@ def _semantic_checks(
     latest: CreateStatement | None = None
     for statement in document.statements:
         if isinstance(statement, CreateStatement):
-            diagnostics.extend(
-                _declaration_diagnostics(statement, phrase_types, definitions)
-            )
+            diagnostics.extend(_declaration_diagnostics(statement, definitions))
             latest = statement
             continue
         target, error = _resolve(statement.reference, latest, definitions)

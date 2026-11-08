@@ -39,93 +39,97 @@ Wheel builders must include `my_plugin/artifactspec_plugins/example.json`; a
 source checkout or editable installation without this file in its distribution
 file records cannot be discovered.
 
-A version 1 manifest looks like:
+A schema version 3 manifest declares complete syntax as data:
 
 ```json
 {
-  "schema_version": 1,
-  "id": "example",
-  "version": "1.0.0",
-  "outputs": ["pdf", "svg"],
-  "phrases": [{"name": "draw a circle", "outputs": ["svg"]}],
-  "properties": [],
-  "representations": [],
-  "renderers": [{"name": "svg-renderer", "outputs": ["svg"]}]
-}
-```
-
-`version` is a nonempty plugin-defined version string; it is not automatically
-compared to distribution or core versions. Each contribution has a nonempty
-name and a list of output names. An empty contribution output list means all
-outputs declared by its plugin; otherwise it must be a subset of those outputs.
-This is a declaration, not a guarantee that an output can actually be rendered.
-There is no automatic core-version compatibility negotiation yet. Duplicate
-plugin IDs and duplicate `(kind, name)` contributions are errors, regardless
-of version or output; errors name the conflict rather than selecting a winner.
-Malformed, missing, or unsupported manifests fail discovery explicitly.
-
-## Semantic type metadata (version 2)
-
-Version 2 adds static type declarations to phrase and property contributions.
-A phrase has an `object_type` string naming the type of the object it creates;
-a property has a nonempty `target_types` array naming the object types it can
-be applied to. The other top-level fields and contribution output rules are
-unchanged. For example:
-
-```json
-{
-  "schema_version": 2,
+  "schema_version": 3,
   "id": "shapes",
   "version": "1.0",
   "outputs": ["image"],
-  "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
-  "properties": [{"name": "color", "outputs": [], "target_types": ["circle"]}],
-  "representations": [],
+  "output_syntax": {"image": "Output image."},
+  "phrases": [{"name": "circle", "outputs": [], "object_type": "circle", "syntax": "Draw {name}."}],
+  "properties": [{"name": "color", "outputs": [], "target_types": ["circle"], "syntax": "Color {reference} with {value}."}],
+  "representations": [{"name": "diagram", "outputs": [], "target_types": ["circle"]}],
   "renderers": []
 }
 ```
 
-Type names are exact, case-sensitive nonempty strings; there is no subtype or
-inheritance model. They are self-reported metadata, not proof of correctness.
-Only JSON string values are supported by the current language. Version 1 remains
-supported: validation issues a warning when an object or property type cannot be
-checked. Typed runtime declarations opt in explicitly:
+Each output has a literal declaration in `output_syntax`. Phrase templates use
+exactly one `{name}` placeholder, and property templates use exactly one each of
+`{reference}` and `{value}`. The remaining text is literal; templates must be
+single trimmed lines of at most 1024 characters, with literal text separating
+adjacent placeholders. Double braces represent literal braces. A name or
+reference is an ASCII identifier; a value is a JSON string. `it` is a reserved
+reference and cannot be a declared name. There is no arbitrary plugin-supplied
+regex or executable grammar. Source lines are trimmed before matching. When a
+statement matches multiple templates, parsing reports ambiguity instead of
+guessing. Identical output declarations for the same output are deduplicated.
 
-```python
-plugin = Plugin("shapes", "1.0", outputs=("image",), schema_version=2)
-plugin.phrase("circle", object_type="circle")(lambda context: None)
-plugin.property("color", target_types=("circle",))(lambda context: None)
-```
+`object_type` and `target_types` are nonempty, exact, case-sensitive type names;
+there is no subtype model. Each contribution has a nonempty name and an output
+list. An empty list means all outputs declared by its plugin; a nonempty list
+must be a subset. Duplicate plugin IDs and duplicate contribution names fail;
+representations may share a name only when their target types do not overlap.
+These rules are checked before runtime autoload. Metadata is self-reported, not
+proof of correctness. Versions 1 and 2 do not have complete templates and are
+rejected with a migration diagnostic; there is no legacy grammar fallback.
+The plugin-defined `version` is not automatically compared to distribution or
+core versions.
 
-Metadata must still match exactly when loading a plugin at runtime.
-`ManifestCatalog` accepts validated static manifests for parsing or validation
-without importing plugin modules or invoking handlers.
+## Migrating version 1 or 2 plugins
+
+1. Set `schema_version` to 3 in the static JSON and runtime declaration.
+   Supply `output_syntax` with a complete literal statement for every output.
+2. Give every phrase an `object_type` and a complete `syntax` containing
+   `{name}`. Give every property nonempty `target_types` and a complete
+   `syntax` containing `{reference}` and `{value}`. Put the same declarations
+   on the corresponding runtime decorators.
+3. Give every representation nonempty `target_types` and update its handler
+   to handle `context.node` at `context.index` rather than iterating the whole
+   document. Representations of the same name may be contributed by independent
+   plugins for disjoint object types.
+4. Ship the JSON in wheel file records, verify that it matches `plugin.manifest()`
+   exactly, and test the installed wheel. Run `artifactspec capabilities`,
+   `validate`, and `lsp` against the metadata before trusting runtime imports.
+
+Remove any use of `--builtin-basic` and `--no-builtin-basic`; there is no core
+basic plugin. Install the needed plugins instead and select their representation
+and renderer explicitly. The packaged examples use `diagram` and `svg`.
+Version 1's unverified-type warnings are not a compatibility mechanism: old
+manifests are rejected before plugin code is imported.
 
 ## Runtime registration
 
 ```python
 from artifactspec.plugins import Plugin, Registry
 
-plugin = Plugin("example", "1.0.0", outputs=("pdf", "svg"))
+plugin = Plugin("shapes", "1.0", outputs=("image",),
+                output_syntax={"image": "Output image."})
 
-@plugin.phrase("draw a circle", outputs=("svg",))
-def draw_circle(context):
-    # A future parsing context will record a typed operation here.
-    pass
+@plugin.phrase("circle", object_type="circle", syntax="Draw {name}.")
+def circle(context):
+    context.create("circle")
 
-@plugin.renderer("svg-renderer", outputs=("svg",))
-def render_svg(context):
-    pass
+@plugin.property("color", target_types=("circle",),
+                 syntax="Color {reference} with {value}.")
+def color(context):
+    context.set("color", context.value)
+
+@plugin.representation("diagram", target_types=("circle",))
+def diagram(context):
+    context.text(context.node.name, "circle", x=20, y=40 + 70 * context.index)
 
 registry = Registry()
 registry.register(plugin)
-handler = registry.handler("phrases", "draw a circle", output="svg")
 ```
 
-The decorators also support `property` and `representation`. They return the
-original callable. Registration validates the whole plugin before modifying the
+The decorators also support `renderer`; each returns the original callable. Registration validates the whole plugin before modifying the
 registry and freezes its contributions. `registry.handler(kind, name, output=...)`
 returns a registered callable only when it is compatible with the requested output.
+For a representation shared by multiple plugins, use
+`registry.representation_handler(name, object_type, output=...)` to select the
+contribution for a particular semantic type.
 Discovery of explicitly registered plugins uses `registry.manifests()`.
 `registry.load_installed("example")` imports a selected plugin, while
 `registry.load_all_installed()` imports every installed plugin. Both compare
@@ -140,8 +144,9 @@ comparison.
 Public phase protocols live in `artifactspec.core.contexts`; fake contexts and
 pytest helpers live in `artifactspec.testing` and
 `artifactspec.testing.pytest_plugin`. See `docs/rendering.md` for their
-contracts. The SVG backend is an independently installed `artifactspec-svg`
-distribution; no SVG backend is embedded in the core package.
+contracts. SVG syntax, layout and rendering belong to the optional `artifactspec-svg`
+distribution. Dated-event syntax and representation belong to the optional
+`artifactspec-events` distribution. Core includes no built-in content plugin.
 
 ## CLI and JSON
 

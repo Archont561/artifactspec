@@ -74,15 +74,9 @@ def installed_plugins(
     return {manifest["id"]: (entry, manifest) for entry, manifest in found}
 
 
-def capabilities(
-    *, details: bool = False, output: str | None = None, builtin_basic: bool = False
-) -> dict[str, Any]:
+def capabilities(*, details: bool = False, output: str | None = None) -> dict[str, Any]:
     """Return the versioned CLI discovery schema from static metadata."""
     sources = [item[1] for item in installed_plugins().values()]
-    if builtin_basic:
-        from artifactspec.plugins._basic_metadata import basic_manifest
-
-        sources.append(basic_manifest())
     check_conflicts(sources)
     manifests = filter_manifests(sources, output)
     plugins = []

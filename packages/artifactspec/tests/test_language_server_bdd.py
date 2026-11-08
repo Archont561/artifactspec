@@ -73,13 +73,26 @@ def state():
 def connected(state, installed_plugin_factory):
     fixture = installed_plugin_factory(
         manifest={
-            "schema_version": 2,
+            "schema_version": 3,
             "id": "example",
             "version": "1",
-            "outputs": ["image"],
-            "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
+            "outputs": ["canvas"],
+            "output_syntax": {"canvas": "Output canvas."},
+            "phrases": [
+                {
+                    "name": "circle",
+                    "outputs": [],
+                    "object_type": "circle",
+                    "syntax": "Create circle named {name}.",
+                }
+            ],
             "properties": [
-                {"name": "color", "outputs": [], "target_types": ["circle"]}
+                {
+                    "name": "circle-color",
+                    "outputs": [],
+                    "target_types": ["circle"],
+                    "syntax": "Set color of {reference} to {value}.",
+                }
             ],
             "representations": [],
             "renderers": [],
@@ -101,7 +114,7 @@ def connected(state, installed_plugin_factory):
 
 @when("the editor opens a specification with an unresolved reference")
 def open_document(state):
-    state["text"] = 'Output image.\nSet color of missing to "red".'
+    state["text"] = 'Output canvas.\nSet color of missing to "red".'
     state["client"].send(
         "textDocument/didOpen",
         {
@@ -136,7 +149,7 @@ def fix_document(state):
             "textDocument": {"uri": state["uri"], "version": 2},
             "contentChanges": [
                 {
-                    "text": 'Output image.\nCreate circle named c.\nSet color of c to "red".'
+                    "text": 'Output canvas.\nCreate circle named c.\nSet color of c to "red".'
                 }
             ],
         },
@@ -156,7 +169,7 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
     connected(state, installed_plugin_factory)
     client = state["client"]
     uri = state["uri"]
-    text = "Output image.\nCreate 😀."
+    text = "Output canvas.\nCreate 😀."
     client.send(
         "textDocument/didOpen",
         {
@@ -169,7 +182,7 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
         },
     )
     diagnostic = client.receive()["params"]["diagnostics"][0]
-    assert diagnostic["code"] == "malformed_statement"
+    assert diagnostic["code"] == "unknown_statement"
     assert diagnostic["range"] == {
         "start": {"line": 1, "character": 0},
         "end": {"line": 1, "character": 10},
@@ -195,7 +208,7 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
         {
             "textDocument": {"uri": uri, "version": 3},
             "contentChanges": [
-                {"text": 'Output image.\nSet color of missing to "red".'}
+                {"text": 'Output canvas.\nSet color of missing to "red".'}
             ],
         },
     )
@@ -204,7 +217,7 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
     from artifactspec.plugins import ManifestCatalog
 
     result = validate(
-        'Output image.\nSet color of missing to "red".',
+        'Output canvas.\nSet color of missing to "red".',
         ManifestCatalog([state["manifest"]]),
         source=uri,
     )
@@ -263,7 +276,7 @@ def test_cli_lsp_reports_invalid_static_metadata(installed_plugin_factory, monke
     "the editor opens a specification with a Unicode separator before an unresolved reference"
 )
 def open_unicode_separator_document(state):
-    text = 'Output image.\nCreate circle named c.\nSet color of c to "\u0085😀".\nSet color of missing to "red".'
+    text = 'Output canvas.\nCreate circle named c.\nSet color of c to "\u0085😀".\nSet color of missing to "red".'
     state["client"].send(
         "textDocument/didOpen",
         {
@@ -315,13 +328,26 @@ def test_incremental_edits_after_separators_use_negotiated_encoding(
 ):
     fixture = installed_plugin_factory(
         manifest={
-            "schema_version": 2,
+            "schema_version": 3,
             "id": "example",
             "version": "1",
-            "outputs": ["image"],
-            "phrases": [{"name": "circle", "outputs": [], "object_type": "circle"}],
+            "outputs": ["canvas"],
+            "output_syntax": {"canvas": "Output canvas."},
+            "phrases": [
+                {
+                    "name": "circle",
+                    "outputs": [],
+                    "object_type": "circle",
+                    "syntax": "Create circle named {name}.",
+                }
+            ],
             "properties": [
-                {"name": "color", "outputs": [], "target_types": ["circle"]}
+                {
+                    "name": "circle-color",
+                    "outputs": [],
+                    "target_types": ["circle"],
+                    "syntax": "Set color of {reference} to {value}.",
+                }
             ],
             "representations": [],
             "renderers": [],
@@ -346,7 +372,7 @@ def test_incremental_edits_after_separators_use_negotiated_encoding(
     uri = "file:///scene.art"
     text = newline.join(
         [
-            "Output image.",
+            "Output canvas.",
             "Create circle named c.",
             'Set color of c to "\u0085😀".',
             '\u3000Set color of missing to "red".',
@@ -387,8 +413,8 @@ def test_incremental_edits_after_separators_use_negotiated_encoding(
     assert client.receive()["params"]["diagnostics"] == []
 
 
-def test_lsp_can_validate_builtin_capabilities_without_loading_handlers(state):
-    client = state["client"] = Client(os.environ.copy(), options=["--builtin-basic"])
+def test_lsp_can_validate_installed_svg_capabilities(state):
+    client = state["client"] = Client(os.environ.copy())
     client.send(
         "initialize", {"processId": None, "rootUri": None, "capabilities": {}}, id=1
     )

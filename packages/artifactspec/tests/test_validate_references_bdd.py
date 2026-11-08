@@ -19,25 +19,25 @@ def state():
 
 @given("typed circle and color capabilities")
 def typed_capabilities(state):
-    plugin = Plugin("shapes", "1", outputs=("image",), schema_version=2)
-    plugin.phrase("circle", object_type="circle")(
+    plugin = Plugin(
+        "shapes", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase("circle", object_type="circle", syntax="Create circle named {name}.")(
         lambda ctx: state["executed"].append(ctx)
     )
-    plugin.phrase("text", object_type="text")(lambda ctx: state["executed"].append(ctx))
-    plugin.property("color", target_types=("circle",))(
+    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
         lambda ctx: state["executed"].append(ctx)
     )
+    plugin.property(
+        "color", target_types=("circle",), syntax="Set color of {reference} to {value}."
+    )(lambda ctx: state["executed"].append(ctx))
     state["registry"] = Registry()
     state["registry"].register(plugin)
 
 
 @given("a legacy plugin without type metadata")
 def legacy_plugin(state):
-    plugin = Plugin("old", "1", outputs=("image",))
-    plugin.phrase("circle")(lambda ctx: None)
-    plugin.property("color")(lambda ctx: None)
-    state["registry"] = Registry()
-    state["registry"].register(plugin)
+    state["legacy"] = {"schema_version": 1, "id": "old"}
 
 
 def check(state, text):
@@ -61,9 +61,13 @@ def wrong_type(state):
     )
 
 
-@when("I validate a legacy specification")
+@when("I inspect its manifest")
 def legacy_input(state):
-    check(state, 'Output image.\nCreate circle named c.\nSet color of c to "red".')
+    from artifactspec.plugins import RegistrationError, validate_manifest
+
+    with pytest.raises(RegistrationError) as exc:
+        validate_manifest(state["legacy"])
+    state["error"] = str(exc.value)
 
 
 @then("both references resolve to their intended objects")
@@ -87,8 +91,6 @@ def wrong_type_error(state):
     assert diagnostic.span.source == "scene.art"
 
 
-@then("validation warns that the property type is unverified")
-def legacy_warning(state):
-    diagnostic = state["result"].diagnostics[0]
-    assert diagnostic.code == "unverified_type"
-    assert diagnostic.severity == "warning"
+@then("the plugin must be migrated to the current schema")
+def legacy_migration(state):
+    assert "migrate to schema version 3" in state["error"]

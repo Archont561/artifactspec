@@ -86,12 +86,8 @@ def create_server(catalog: CapabilityCatalog) -> LanguageServer:
     return server
 
 
-def start(*, builtin_basic: bool = False) -> None:
+def start() -> None:
     """Start the server over standard input and output."""
     manifests = [item[1] for item in installed_plugins().values()]
-    if builtin_basic:
-        from artifactspec.plugins._basic_metadata import basic_manifest
-
-        manifests.append(basic_manifest())
     catalog = ManifestCatalog(manifests)
     create_server(catalog).start_io()

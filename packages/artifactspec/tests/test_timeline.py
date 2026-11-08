@@ -5,6 +5,7 @@ from datetime import date
 from xml.etree import ElementTree
 
 import pytest
+from artifactspec_events.plugin import plugin as event_plugin
 from hypothesis import given
 from hypothesis import strategies as st
 from typer.testing import CliRunner
@@ -14,12 +15,11 @@ from artifactspec.core.models import Content, ContentNode
 from artifactspec.core.pipeline import PipelineError, build_content
 from artifactspec.core.rendering import compose
 from artifactspec.plugins import Registry
-from artifactspec.plugins.basic import basic_plugin
 
 
 def registry():
     result = Registry()
-    result.register(basic_plugin())
+    result.register(event_plugin)
     return result
 
 
@@ -27,7 +27,7 @@ def specification(event_date, label):
     return (
         "Output image.\nCreate event named item.\n"
         f"Set date of item to {json.dumps(event_date)}.\n"
-        f"Set value of item to {json.dumps(label)}."
+        f"Set label of item to {json.dumps(label)}."
     )
 
 
@@ -39,7 +39,7 @@ def test_calendar_date_is_preserved_as_content_not_playback(event_date):
     assert dict(content.nodes[0].properties)["date"] == text
     for output, separator in (("image", " — "), ("report", ": ")):
         layout = compose(
-            content, output=output, representation="basic", registry=registry_
+            content, output=output, representation="diagram", registry=registry_
         )
         assert layout.elements[0].text == f"{text}{separator}Event"
         assert layout.elements[0].y == 40
@@ -76,8 +76,8 @@ def test_empty_event_labels_are_rejected(value):
 )
 def test_missing_event_fields_fail_composition(properties):
     content = Content((ContentNode("event", "event", properties, ()),))
-    with pytest.raises(PipelineError, match="requires date and value"):
-        compose(content, output="image", representation="basic", registry=registry())
+    with pytest.raises(PipelineError, match="requires date and label"):
+        compose(content, output="image", representation="diagram", registry=registry())
 
 
 @pytest.mark.parametrize(
@@ -88,7 +88,7 @@ def test_direct_semantic_content_cannot_bypass_event_checks(date_value, label):
         (ContentNode("event", "event", (("date", date_value), ("value", label)), ()),)
     )
     with pytest.raises(PipelineError):
-        compose(content, output="report", representation="basic", registry=registry())
+        compose(content, output="report", representation="diagram", registry=registry())
 
 
 def test_cli_renders_event_and_retains_dates_and_provenance(tmp_path):
@@ -102,9 +102,8 @@ def test_cli_renders_event_and_retains_dates_and_provenance(tmp_path):
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -126,7 +125,7 @@ def test_cli_renders_event_and_retains_dates_and_provenance(tmp_path):
 def test_missing_event_date_does_not_replace_existing_artifact(tmp_path):
     source = tmp_path / "timeline.art"
     source.write_text(
-        'Output image.\nCreate event named item.\nSet value of item to "Event".',
+        'Output image.\nCreate event named item.\nSet label of item to "Event".',
         encoding="utf-8",
     )
     destination = tmp_path / "timeline.svg"
@@ -136,9 +135,8 @@ def test_missing_event_date_does_not_replace_existing_artifact(tmp_path):
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -146,17 +144,16 @@ def test_missing_event_date_does_not_replace_existing_artifact(tmp_path):
         ],
     )
     assert result.exit_code == 2
-    assert "requires date and value" in result.output
+    assert "requires date and label" in result.output
     assert destination.read_text(encoding="utf-8") == "old"
 
 
 def test_static_validation_does_not_claim_to_check_calendar_values():
     from artifactspec.core.validation import validate
     from artifactspec.plugins import ManifestCatalog
-    from artifactspec.plugins._basic_metadata import basic_manifest
 
     text = specification("2024-02-30", "Event")
-    assert validate(text, ManifestCatalog([basic_manifest()])).valid
+    assert validate(text, ManifestCatalog([event_plugin.manifest()])).valid
     with pytest.raises(PipelineError, match="valid ISO calendar date"):
         build_content(text, registry())
 
@@ -165,5 +162,5 @@ def test_animation_output_is_not_inferred_from_event_dates():
     content = build_content(specification("2000-01-01", "Event"), registry())
     with pytest.raises(PipelineError, match="compatible with output 'animation'"):
         compose(
-            content, output="animation", representation="basic", registry=registry()
+            content, output="animation", representation="diagram", registry=registry()
         )

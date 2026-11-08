@@ -26,19 +26,11 @@ def validate_file(
     format: Annotated[
         OutputFormat, typer.Option("--format", help="Diagnostic output format.")
     ] = OutputFormat.text,
-    builtin_basic: Annotated[
-        bool,
-        typer.Option("--builtin-basic", help="Include static built-in capabilities."),
-    ] = False,
 ) -> None:
     """Validate a specification using installed static plugin metadata."""
     try:
         text = path.read_text(encoding="utf-8")
         manifests = [item[1] for item in installed_plugins().values()]
-        if builtin_basic:
-            from artifactspec.plugins._basic_metadata import basic_manifest
-
-            manifests.append(basic_manifest())
         catalog = ManifestCatalog(manifests)
         result = validate(text, catalog, source=str(path))
     except (OSError, UnicodeError, RegistrationError) as exc:

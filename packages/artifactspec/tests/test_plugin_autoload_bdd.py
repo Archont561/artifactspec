@@ -25,10 +25,11 @@ def state():
 def plugin(state, tmp_path, monkeypatch, installed_plugin_factory):
     marker = tmp_path / "loaded"
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
+        "output_syntax": {"image": "Output image."},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -37,7 +38,7 @@ def plugin(state, tmp_path, monkeypatch, installed_plugin_factory):
     source = f"""from pathlib import Path
 Path({str(marker)!r}).write_text("loaded")
 from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",), schema_version=2)
+plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={{"image": "Output image."}})
 @plugin.renderer("example-svg")
 def render(ctx):
     ctx.emit(b"example artifact", media_type="image/svg+xml", editable=True)
@@ -71,9 +72,8 @@ def run(state, extra):
         [
             "render",
             str(state["source"]),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "example-svg",
             "--output",
@@ -95,12 +95,12 @@ def disable(state):
 
 @when("I explicitly select that plugin with autoload disabled")
 def explicit(state):
-    run(state, ["--no-plugin-autoload", "--plugin", "example"])
+    run(state, ["--no-plugin-autoload", "--plugin", "example", "--plugin", "svg"])
 
 
 @then("rendering fails without importing the plugin")
 def not_loaded(state):
-    assert state["result"].exit_code == 2
+    assert state["result"].exit_code == 1
     assert not state["marker"].exists()
     assert not state["destination"].exists()
 
@@ -116,10 +116,11 @@ def test_autoload_rejects_conflicts_before_importing_plugins(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
+        "output_syntax": {"image": "Output image."},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -134,9 +135,8 @@ def test_autoload_rejects_conflicts_before_importing_plugins(
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -154,9 +154,8 @@ def test_autoload_rejects_conflicts_before_importing_plugins(
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -174,10 +173,11 @@ def test_autoload_failure_can_be_avoided_with_explicit_opt_out(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
+        "output_syntax": {"image": "Output image."},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -192,9 +192,8 @@ def test_autoload_failure_can_be_avoided_with_explicit_opt_out(
     args = [
         "render",
         str(source),
-        "--builtin-basic",
         "--representation",
-        "basic",
+        "diagram",
         "--renderer",
         "svg",
         "--output",
@@ -219,9 +218,7 @@ def test_validation_and_language_server_do_not_import_plugins(
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "scene.art"
     source.write_text("Output image.\nCreate text named t.", encoding="utf-8")
-    validation = CliRunner().invoke(
-        app, ["validate", str(source), "--builtin-basic", "--format", "json"]
-    )
+    validation = CliRunner().invoke(app, ["validate", str(source), "--format", "json"])
     assert validation.exit_code == 0, validation.output
     assert json.loads(validation.stdout)["valid"]
     started = []
@@ -231,6 +228,6 @@ def test_validation_and_language_server_do_not_import_plugins(
             started.append(True)
 
     monkeypatch.setattr(lsp, "create_server", lambda catalog: FakeServer())
-    lsp.start(builtin_basic=True)
+    lsp.start()
     assert started == [True]
     assert not fixture["marker"].exists()

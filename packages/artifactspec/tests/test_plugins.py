@@ -12,10 +12,11 @@ from artifactspec.plugins.discovery import capabilities, installed_plugins
 
 def manifest():
     return {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "one",
         "version": "1",
         "outputs": ["svg", "pdf"],
+        "output_syntax": {"svg": "Output svg.", "pdf": "Output pdf."},
         "phrases": [],
         "properties": [],
         "representations": [],
@@ -24,31 +25,38 @@ def manifest():
 
 
 def test_decorators_and_freezing():
-    plugin = Plugin("one", "1", outputs=("svg", "pdf"))
-    for decorator in (
-        plugin.phrase,
-        plugin.property,
-        plugin.representation,
-        plugin.renderer,
-    ):
+    plugin = Plugin(
+        "one",
+        "1",
+        outputs=("svg", "pdf"),
+        output_syntax={"svg": "Output svg.", "pdf": "Output pdf."},
+    )
 
-        def handler(context):
-            return context
+    def handler(context):
+        return context
 
-        assert decorator("one")(handler) is handler
+    assert (
+        plugin.phrase("one", object_type="one", syntax="Create {name}.")(handler)
+        is handler
+    )
+    assert (
+        plugin.property(
+            "one", target_types=("one",), syntax="Set {reference} {value}."
+        )(handler)
+        is handler
+    )
+    assert plugin.representation("one", target_types=("one",))(handler) is handler
+    assert plugin.renderer("one")(handler) is handler
     registry = Registry()
     registry.register(plugin)
-    assert registry.manifests()[0] == {
-        **manifest(),
-        "outputs": ["pdf", "svg"],
-        **{
-            kind: [{"name": "one", "outputs": []}]
-            for kind in ("phrases", "properties", "representations", "renderers")
-        },
-    }
+    actual = registry.manifests()[0]
+    assert actual["outputs"] == ["pdf", "svg"]
+    assert actual["phrases"][0]["syntax"] == "Create {name}."
+    assert actual["properties"][0]["target_types"] == ["one"]
+    assert actual["representations"][0]["target_types"] == ["one"]
+    assert actual["renderers"] == [{"name": "one", "outputs": []}]
     with pytest.raises(RegistrationError, match="frozen"):
-        plugin.phrase("new")(lambda x: x)
-    # Returned data must not mutate the registry.
+        plugin.phrase("new", object_type="new", syntax="New {name}.")(lambda x: x)
     result = registry.manifests()
     result[0]["outputs"].clear()
     assert registry.manifests()[0]["outputs"] == ["pdf", "svg"]
@@ -57,22 +65,28 @@ def test_decorators_and_freezing():
 
 def test_invalid_registration_is_atomic():
     registry = Registry()
-    first = Plugin("one", "1", outputs=("svg",))
+    first = Plugin("one", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
     registry.register(first)
     with pytest.raises(RegistrationError, match="duplicate plugin id"):
         registry.register(Plugin("one", "2"))
     with pytest.raises(RegistrationError, match="expected a Plugin"):
         registry.register(None)
     with pytest.raises(RegistrationError, match="unsupported outputs"):
-        Plugin("two", "1", outputs=("svg",)).renderer("bad", outputs=("pdf",))(
-            lambda x: x
-        )
+        Plugin(
+            "two", "1", outputs=("svg",), output_syntax={"svg": "Output svg."}
+        ).renderer("bad", outputs=("pdf",))(lambda x: x)
     plugin = Plugin("three", "1")
-    plugin.property("name")(lambda x: x)
+    plugin.property(
+        "name", target_types=("thing",), syntax="Set name of {reference} to {value}."
+    )(lambda x: x)
     with pytest.raises(RegistrationError, match="duplicate"):
-        plugin.property("name")(lambda x: x)
+        plugin.property(
+            "name",
+            target_types=("thing",),
+            syntax="Set name of {reference} to {value}.",
+        )(lambda x: x)
     with pytest.raises(RegistrationError, match="callable"):
-        plugin.phrase("other")(None)
+        plugin.phrase("other", object_type="other", syntax="Create other {name}.")(None)
     assert [p["id"] for p in registry.manifests()] == ["one"]
 
 
@@ -80,19 +94,41 @@ def test_invalid_registration_is_atomic():
     "change, message",
     [
         (lambda m: m.pop("id"), "exactly"),
-        (lambda m: m.update(schema_version=True), "schema_version"),
+        (lambda m: m.update(schema_version=True), "schema"),
         (lambda m: m.update(id="Bad/id"), "plugin id"),
         (lambda m: m.update(version=""), "version"),
         (lambda m: m.update(outputs="svg"), "list"),
         (lambda m: m.update(outputs=["svg", "svg"]), "duplicate"),
         (lambda m: m.update(outputs=[" svg"]), "whitespace"),
         (lambda m: m.update(phrases={}), "list"),
-        (lambda m: m.update(phrases=[{"name": "x"}]), "name and outputs"),
+        (lambda m: m.update(phrases=[{"name": "x"}]), "object_type"),
         (
-            lambda m: m.update(phrases=[{"name": "x", "outputs": ["gif"]}]),
+            lambda m: m.update(
+                phrases=[
+                    {
+                        "name": "x",
+                        "outputs": ["gif"],
+                        "object_type": "x",
+                        "syntax": "Create x {name}.",
+                    }
+                ]
+            ),
             "unsupported",
         ),
-        (lambda m: m.update(phrases=[{"name": "x", "outputs": []}] * 2), "duplicate"),
+        (
+            lambda m: m.update(
+                phrases=[
+                    {
+                        "name": "x",
+                        "outputs": [],
+                        "object_type": "x",
+                        "syntax": "Create x {name}.",
+                    }
+                ]
+                * 2
+            ),
+            "duplicate",
+        ),
     ],
 )
 def test_invalid_manifest(change, message):
@@ -105,21 +141,26 @@ def test_invalid_manifest(change, message):
 def test_manifest_expected_id():
     with pytest.raises(RegistrationError, match="does not match"):
         validate_manifest(manifest(), expected_id="other")
-    with pytest.raises(RegistrationError, match="exactly"):
+    with pytest.raises(RegistrationError, match="manifest must be an object"):
         validate_manifest([])
 
 
 def test_static_discovery_and_loading(installed_plugin_factory, monkeypatch):
     source = """from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("svg", "pdf"))
-@plugin.phrase("draw", outputs=("svg",))
+plugin = Plugin("example", "1.0", outputs=("svg", "pdf"), output_syntax={"svg": "Output svg.", "pdf": "Output pdf."})
+@plugin.phrase("draw", outputs=("svg",), object_type="draw", syntax="Draw {name}.")
 def draw(context):
     return context
 """
     fixture = installed_plugin_factory(module_source=source)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     assert "example" in installed_plugins()
-    assert capabilities()["plugins"][0]["capabilities"]["phrases"] == 1
+    assert (
+        next(item for item in capabilities()["plugins"] if item["id"] == "example")[
+            "capabilities"
+        ]["phrases"]
+        == 1
+    )
     assert (
         capabilities(output="pdf", details=True)["plugins"][0]["capabilities"][
             "phrases"
@@ -227,8 +268,8 @@ def test_invalid_entry_and_missing_file_records(monkeypatch):
 
 
 def test_registration_conflicts_are_output_independent():
-    a = Plugin("a", "1", outputs=("svg",))
-    b = Plugin("b", "1", outputs=("pdf",))
+    a = Plugin("a", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
+    b = Plugin("b", "1", outputs=("pdf",), output_syntax={"pdf": "Output pdf."})
     a.renderer("render")(lambda x: x)
     b.renderer("render")(lambda x: x)
     registry = Registry()
@@ -242,9 +283,19 @@ def test_registration_conflicts_are_output_independent():
 
 
 def test_handlers_respect_output_and_filter_narrows_contribution():
-    plugin = Plugin("draw", "1", outputs=("svg", "pdf"))
+    plugin = Plugin(
+        "draw",
+        "1",
+        outputs=("svg", "pdf"),
+        output_syntax={"svg": "Output svg.", "pdf": "Output pdf."},
+    )
 
-    @plugin.phrase("circle", outputs=("svg", "pdf"))
+    @plugin.phrase(
+        "circle",
+        outputs=("svg", "pdf"),
+        object_type="circle",
+        syntax="Create circle {name}.",
+    )
     def draw(context):
         return context
 
@@ -252,7 +303,12 @@ def test_handlers_respect_output_and_filter_narrows_contribution():
     registry.register(plugin)
     assert registry.handler("phrases", "circle", output="svg") is draw
     assert registry.manifests(output="svg")[0]["phrases"] == [
-        {"name": "circle", "outputs": ["svg"]}
+        {
+            "name": "circle",
+            "outputs": ["svg"],
+            "object_type": "circle",
+            "syntax": "Create circle {name}.",
+        }
     ]
     with pytest.raises(RegistrationError, match="unknown capability"):
         registry.handler("bad", "circle")
@@ -263,9 +319,11 @@ def test_handlers_respect_output_and_filter_narrows_contribution():
 def test_output_arguments_reject_strings():
     with pytest.raises(RegistrationError, match="not a string"):
         Plugin("a", "1", outputs="svg")
-    plugin = Plugin("a", "1", outputs=("svg",))
+    plugin = Plugin("a", "1", outputs=("svg",), output_syntax={"svg": "Output svg."})
     with pytest.raises(RegistrationError, match="not a string"):
-        plugin.phrase("a", outputs="svg")(lambda x: x)
+        plugin.phrase("a", outputs="svg", object_type="a", syntax="Create a {name}.")(
+            lambda x: x
+        )
     with pytest.raises(RegistrationError, match="iterable"):
         Plugin("a", "1", outputs=None)
 

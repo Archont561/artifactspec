@@ -24,13 +24,25 @@ def state():
 
 @given("a plugin declaring SVG and PDF output")
 def plugin_with_outputs(state):
-    plugin = Plugin("shapes", "1.0", outputs=("pdf", "svg"))
+    plugin = Plugin(
+        "shapes",
+        "1.0",
+        outputs=("pdf", "svg"),
+        output_syntax={"pdf": "Output pdf.", "svg": "Output svg."},
+    )
 
-    @plugin.phrase("draw circle", outputs=("svg",))
+    @plugin.phrase(
+        "draw circle",
+        outputs=("svg",),
+        object_type="circle",
+        syntax="Draw circle {name}.",
+    )
     def draw(context):
         return context
 
-    @plugin.property("color")
+    @plugin.property(
+        "color", target_types=("circle",), syntax="Color {reference} {value}."
+    )
     def color(context):
         return context
 
@@ -46,18 +58,43 @@ def register_plugin(state):
 @then("its declared capabilities are available for compatible outputs")
 def capabilities_registered(state):
     manifest = state["registry"].manifests(output="svg")[0]
-    assert manifest["phrases"] == [{"name": "draw circle", "outputs": ["svg"]}]
-    assert manifest["properties"] == [{"name": "color", "outputs": []}]
+    assert manifest["phrases"] == [
+        {
+            "name": "draw circle",
+            "outputs": ["svg"],
+            "object_type": "circle",
+            "syntax": "Draw circle {name}.",
+        }
+    ]
+    assert manifest["properties"] == [
+        {
+            "name": "color",
+            "outputs": [],
+            "target_types": ["circle"],
+            "syntax": "Color {reference} {value}.",
+        }
+    ]
     pdf = state["registry"].manifests(output="pdf")[0]
     assert pdf["phrases"] == []
-    assert pdf["properties"] == [{"name": "color", "outputs": []}]
+    assert pdf["properties"] == [
+        {
+            "name": "color",
+            "outputs": [],
+            "target_types": ["circle"],
+            "syntax": "Color {reference} {value}.",
+        }
+    ]
 
 
 @given("a registry with a phrase contribution")
 def registry_with_phrase(state):
     registry = Registry()
-    plugin = Plugin("first", "1", outputs=("svg",))
-    plugin.phrase("same")(lambda context: context)
+    plugin = Plugin(
+        "first", "1", outputs=("svg",), output_syntax={"svg": "Output svg."}
+    )
+    plugin.phrase("same", object_type="same", syntax="Create same {name}.")(
+        lambda context: context
+    )
     registry.register(plugin)
     state["registry"] = registry
     state["before"] = registry.manifests()
@@ -65,8 +102,12 @@ def registry_with_phrase(state):
 
 @when("another plugin contributes the same phrase")
 def conflicting_plugin(state):
-    plugin = Plugin("second", "1", outputs=("pdf",))
-    plugin.phrase("same")(lambda context: context)
+    plugin = Plugin(
+        "second", "1", outputs=("pdf",), output_syntax={"pdf": "Output pdf."}
+    )
+    plugin.phrase("same", object_type="same", syntax="Create same {name}.")(
+        lambda context: context
+    )
     with pytest.raises(RegistrationError, match="phrase.*same") as error:
         state["registry"].register(plugin)
     state["error"] = str(error.value)

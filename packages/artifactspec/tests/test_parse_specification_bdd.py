@@ -24,17 +24,34 @@ def state():
 @given("image and animation outputs are registered")
 @given("a circle phrase is registered only for image output")
 def registered_capabilities(state):
-    plugin = Plugin("draw", "1", outputs=("image", "animation"))
+    plugin = Plugin(
+        "draw",
+        "1",
+        outputs=("image", "animation"),
+        output_syntax={"image": "Output image.", "animation": "Output animation."},
+    )
 
-    @plugin.phrase("circle", outputs=("image",))
+    @plugin.phrase(
+        "circle",
+        outputs=("image",),
+        object_type="circle",
+        syntax="Create circle named {name}.",
+    )
     def circle(context):
         state["executions"].append(context)
 
-    @plugin.property("color")
+    @plugin.property(
+        "color", target_types=("circle",), syntax="Set color of {reference} to {value}."
+    )
     def color(context):
         state["executions"].append(context)
 
-    @plugin.property("label", outputs=("image",))
+    @plugin.property(
+        "label",
+        outputs=("image",),
+        target_types=("circle",),
+        syntax="Set label of {reference} to {value}.",
+    )
     def label(context):
         state["executions"].append(context)
 

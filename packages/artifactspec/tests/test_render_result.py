@@ -22,7 +22,7 @@ def test_provenance_status_distinguishes_missing_and_empty_elements(linked):
         TextElement(0, index, "text", "black", 20, (span,) if has_link else ())
         for index, has_link in enumerate(linked)
     )
-    composition = Composition("image", "basic", 640, 480, elements)
+    composition = Composition("image", "diagram", 640, 480, elements)
     spans, status = _composition_provenance(composition)
     expected = (
         "no_elements"
@@ -37,13 +37,12 @@ def test_provenance_status_distinguishes_missing_and_empty_elements(linked):
     assert spans == ((span,) if any(linked) else ())
 
 
-def invoke(source, destination, *, representation="basic", renderer="svg", extra=()):
+def invoke(source, destination, *, representation="diagram", renderer="svg", extra=()):
     return CliRunner().invoke(
         app,
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
             representation,
             "--renderer",
@@ -62,7 +61,7 @@ def invoke(source, destination, *, representation="basic", renderer="svg", extra
     [
         (
             'Output image.\nSet value of missing to "x".',
-            "basic",
+            "diagram",
             "svg",
             "validation_failed",
             1,
@@ -76,21 +75,21 @@ def invoke(source, destination, *, representation="basic", renderer="svg", extra
         ),
         (
             'Output image.\nCreate event named x.\nSet date of x to "2024-02-30".',
-            "basic",
+            "diagram",
             "svg",
             "property_failed",
             2,
         ),
         (
             "Output image.\nCreate event named x.",
-            "basic",
+            "diagram",
             "svg",
             "representation_failed",
             2,
         ),
         (
             'Output image.\nCreate text named x.\nSet color of x to "url(x)".',
-            "basic",
+            "diagram",
             "svg",
             "renderer_failed",
             2,
@@ -130,7 +129,7 @@ def test_json_read_error_and_plugin_error(tmp_path):
             "render",
             str(source),
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -160,23 +159,38 @@ def test_exact_synthetic_renderer_reports_no_limitations_without_claiming_fideli
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "text", "outputs": [], "object_type": "text"}],
-        "properties": [{"name": "value", "outputs": [], "target_types": ["text"]}],
-        "representations": [{"name": "exact", "outputs": []}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "text",
+                "outputs": [],
+                "object_type": "text",
+                "syntax": "Create text named {name}.",
+            }
+        ],
+        "properties": [
+            {
+                "name": "value",
+                "outputs": [],
+                "target_types": ["text"],
+                "syntax": "Set value of {reference} to {value}.",
+            }
+        ],
+        "representations": [{"name": "exact", "outputs": [], "target_types": ["text"]}],
         "renderers": [{"name": "exact-svg", "outputs": []}],
     }
     plugin = """from html import escape
 from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",), schema_version=2)
-@plugin.phrase("text", object_type="text")
+plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={"image": "Output image."})
+@plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
 def create(ctx): ctx.create("text")
-@plugin.property("value", target_types=("text",))
+@plugin.property("value", target_types=("text",), syntax="Set value of {reference} to {value}.")
 def assign(ctx): ctx.set("value", ctx.value)
-@plugin.representation("exact")
+@plugin.representation("exact", target_types=("text",))
 def layout(ctx):
     for node in ctx.content.nodes:
         ctx.text(node.name, dict(node.properties)["value"], x=20, y=40)
@@ -199,6 +213,7 @@ def render(ctx):
         [
             "render",
             str(source),
+            "--no-plugin-autoload",
             "--plugin",
             "example",
             "--representation",
@@ -225,20 +240,30 @@ def test_failure_keeps_validation_warnings_and_phase_limitations(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
     manifest = {
-        "schema_version": 1,
+        "schema_version": 3,
         "id": "example",
         "version": "1.0",
         "outputs": ["image"],
-        "phrases": [{"name": "text", "outputs": []}],
+        "output_syntax": {"image": "Output image."},
+        "phrases": [
+            {
+                "name": "text",
+                "outputs": [],
+                "object_type": "text",
+                "syntax": "Create text named {name}.",
+            }
+        ],
         "properties": [],
-        "representations": [{"name": "layout", "outputs": []}],
+        "representations": [
+            {"name": "layout", "outputs": [], "target_types": ["text"]}
+        ],
         "renderers": [{"name": "broken", "outputs": []}],
     }
     plugin = """from artifactspec.plugins import Plugin
-plugin = Plugin("example", "1.0", outputs=("image",))
-@plugin.phrase("text")
+plugin = Plugin("example", "1.0", outputs=("image",), output_syntax={"image": "Output image."})
+@plugin.phrase("text", object_type="text", syntax="Create text named {name}.")
 def create(ctx): ctx.create("text")
-@plugin.representation("layout")
+@plugin.representation("layout", target_types=("text",))
 def layout(ctx):
     ctx.warn("layout limitation")
     ctx.text(ctx.content.nodes[0].name, "x", x=0, y=0)
@@ -247,6 +272,21 @@ def broken(ctx):
     ctx.warn("renderer limitation")
     raise ValueError("renderer broke")
 """
+    from artifactspec.core import rendering
+    from artifactspec.core.validation import Diagnostic, ValidationResult
+
+    original_validate = rendering.validate
+
+    def validate_with_warning(*args, **kwargs):
+        result = original_validate(*args, **kwargs)
+        warning = Diagnostic(
+            "custom_warning", "warning", "check this", result.document.output_span
+        )
+        return ValidationResult(
+            result.document, (*result.diagnostics, warning), result.resolutions
+        )
+
+    monkeypatch.setattr(rendering, "validate", validate_with_warning)
     fixture = installed_plugin_factory(manifest=manifest, module_source=plugin)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"
@@ -258,6 +298,7 @@ def broken(ctx):
         [
             "render",
             str(source),
+            "--no-plugin-autoload",
             "--plugin",
             "example",
             "--representation",
@@ -273,7 +314,7 @@ def broken(ctx):
     assert result.exit_code == 2, result.output
     data = json.loads(result.stdout)
     assert data["error"]["code"] == "renderer_failed"
-    assert any(item["code"] == "unverified_type" for item in data["warnings"])
+    assert any(item["code"] == "custom_warning" for item in data["warnings"])
     assert data["limitations"] == ["layout limitation", "renderer limitation"]
     assert data["fallback"] is None
     assert dest.read_text(encoding="utf-8") == "old"
@@ -302,7 +343,7 @@ def test_render_propagates_incomplete_composition_provenance(
         TextElement(0, index, "text", "black", 20, (span,) if has_link else ())
         for index, has_link in enumerate(linked)
     )
-    composition = Composition("image", "basic", 640, 480, elements)
+    composition = Composition("image", "diagram", 640, 480, elements)
     monkeypatch.setattr(rendering, "compose", lambda *args, **kwargs: composition)
     source = tmp_path / "source.art"
     source.write_text("Output image.\nCreate text named t.", encoding="utf-8")
@@ -329,9 +370,8 @@ def test_default_failure_output_remains_text_on_stderr(tmp_path):
         [
             "render",
             str(source),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -344,14 +384,16 @@ def test_default_failure_output_remains_text_on_stderr(tmp_path):
 
 
 def test_representation_failure_keeps_limitations_for_api_call():
-    from artifactspec.core.models import Content
+    from artifactspec.core.models import Content, ContentNode
     from artifactspec.core.pipeline import PipelineError
     from artifactspec.core.rendering import compose
     from artifactspec.plugins import Plugin, Registry
 
-    plugin = Plugin("test", "1", outputs=("image",))
+    plugin = Plugin(
+        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
 
-    @plugin.representation("layout")
+    @plugin.representation("layout", target_types=("text",))
     def layout(context):
         context.warn("partial layout")
         raise ValueError("not supported")
@@ -359,7 +401,12 @@ def test_representation_failure_keeps_limitations_for_api_call():
     registry = Registry()
     registry.register(plugin)
     with pytest.raises(PipelineError, match="not supported") as error:
-        compose(Content(()), output="image", representation="layout", registry=registry)
+        compose(
+            Content((ContentNode("x", "text", (), ()),)),
+            output="image",
+            representation="layout",
+            registry=registry,
+        )
     assert error.value.code == "representation_failed"
     assert error.value.limitations == ("partial layout",)
 
@@ -371,17 +418,34 @@ def test_json_format_cannot_override_typer_argument_parse_errors():
     assert "Missing" in result.stderr
 
 
-def test_validation_failure_preserves_warnings_with_errors(tmp_path):
+def test_validation_failure_preserves_warnings_with_errors(tmp_path, monkeypatch):
+    from artifactspec.core import rendering
     from artifactspec.core.pipeline import PipelineError
-    from artifactspec.core.rendering import render
+    from artifactspec.core.validation import Diagnostic, ValidationResult
     from artifactspec.plugins import Plugin, Registry
 
-    plugin = Plugin("legacy", "1", outputs=("image",))
-    plugin.phrase("text")(lambda ctx: ctx.create("text"))
+    plugin = Plugin(
+        "test", "1", outputs=("image",), output_syntax={"image": "Output image."}
+    )
+    plugin.phrase("text", object_type="text", syntax="Create text named {name}.")(
+        lambda ctx: ctx.create("text")
+    )
     registry = Registry()
     registry.register(plugin)
+    original = rendering.validate
+
+    def validate_with_warning(*args, **kwargs):
+        result = original(*args, **kwargs)
+        warning = Diagnostic(
+            "custom_warning", "warning", "check this", result.document.output_span
+        )
+        return ValidationResult(
+            result.document, (*result.diagnostics, warning), result.resolutions
+        )
+
+    monkeypatch.setattr(rendering, "validate", validate_with_warning)
     with pytest.raises(PipelineError) as error:
-        render(
+        rendering.render(
             "Output image.\nCreate text named t.\nCreate text named t.",
             registry,
             representation="missing",
@@ -390,4 +454,4 @@ def test_validation_failure_preserves_warnings_with_errors(tmp_path):
         )
     assert error.value.code == "validation_failed"
     assert any(item.code == "duplicate_name" for item in error.value.diagnostics)
-    assert any(item.code == "unverified_type" for item in error.value.warnings)
+    assert any(item.code == "custom_warning" for item in error.value.warnings)

@@ -15,26 +15,32 @@ def state():
 
 
 def setup(state, output):
+    from artifactspec_events.plugin import plugin as event_plugin
+
     from artifactspec.plugins import Registry
-    from artifactspec.plugins.basic import basic_plugin
 
     registry = Registry()
-    registry.register(basic_plugin())
+    registry.register(event_plugin)
     from artifactspec_svg.plugin import plugin as svg_plugin
 
     registry.register(svg_plugin)
     state["registry"] = registry
-    state["spec"] = (
-        f'Output {output}.\nCreate text named title.\nSet value of title to "Hello & world".\nCreate rectangle named box.'
-    )
+    if output == "report":
+        state["spec"] = (
+            'Output report.\nCreate event named title.\nSet date of title to "2000-01-01".\nSet label of title to "Hello & world".'
+        )
+    else:
+        state["spec"] = (
+            'Output image.\nCreate text named title.\nSet value of title to "Hello & world".\nCreate rectangle named box.'
+        )
 
 
-@given("an explicitly trusted basic SVG plugin and an image specification")
+@given("trusted SVG and event plugins and an image specification")
 def image_spec(state):
     setup(state, "image")
 
 
-@given("an explicitly trusted basic SVG plugin and a report specification")
+@given("trusted SVG and event plugins and a report specification")
 def report_spec(state):
     setup(state, "report")
 
@@ -47,7 +53,7 @@ def render_image(state, tmp_path):
     state["result"] = render(
         state["spec"],
         state["registry"],
-        representation="basic",
+        representation="diagram",
         renderer="svg",
         destination=state["path"],
         source="scene.art",
@@ -65,7 +71,7 @@ def svg_content(state):
 @then("the result identifies its renderer and source provenance")
 def provenance(state):
     result = state["result"]
-    assert result.renderer == "svg" and result.representation == "basic"
+    assert result.renderer == "svg" and result.representation == "diagram"
     assert result.artifact.path == state["path"]
     assert result.artifact.media_type == "image/svg+xml" and result.artifact.editable
     assert {span.start.line for span in result.provenance} == {2, 3, 4}
@@ -79,7 +85,7 @@ def select_report(state):
 
     content = build_content(state["spec"], state["registry"])
     state["composition"] = compose(
-        content, output="report", representation="basic", registry=state["registry"]
+        content, output="report", representation="diagram", registry=state["registry"]
     )
 
 
@@ -88,12 +94,13 @@ def report_composition(state):
     composition = state["composition"]
     assert composition.output == "report"
     assert any(
-        getattr(item, "text", None) == "Hello & world" for item in composition.elements
+        getattr(item, "text", None) == "2000-01-01: Hello & world"
+        for item in composition.elements
     )
     assert not hasattr(composition, "playback")
 
 
-@given("a specification file and explicitly selected built-in image plugin")
+@given("a specification file and an installed SVG plugin")
 def cli_spec(state, tmp_path):
     state["spec_file"] = tmp_path / "spec.art"
     state["spec_file"].write_text(
@@ -114,9 +121,8 @@ def run_cli(state):
         [
             "render",
             str(state["spec_file"]),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
@@ -131,7 +137,7 @@ def check_cli(state):
 
     assert state["result"].exit_code == 0, state["result"].output
     result = json.loads(state["result"].output)
-    assert result["renderer"] == "svg" and result["representation"] == "basic"
+    assert result["renderer"] == "svg" and result["representation"] == "diagram"
     assert result["artifact"]["path"] == str(state["destination"])
     assert {span["start"]["line"] for span in result["provenance"]} == {2, 3}
     assert (
@@ -145,17 +151,18 @@ def check_cli(state):
 
 @given("a timeline of two dated events in declaration order")
 def timeline_spec(state):
+    from artifactspec_events.plugin import plugin as event_plugin
+
     from artifactspec.core.pipeline import build_content
     from artifactspec.plugins import Registry
-    from artifactspec.plugins.basic import basic_plugin
 
     registry = Registry()
-    registry.register(basic_plugin())
+    registry.register(event_plugin)
     text = (
         "Output image.\nCreate event named first.\n"
-        'Set date of first to "2001-01-01".\nSet value of first to "First".\n'
+        'Set date of first to "2001-01-01".\nSet label of first to "First".\n'
         "Create event named second.\n"
-        'Set date of second to "1900-02-03".\nSet value of second to "Second".'
+        'Set date of second to "1900-02-03".\nSet label of second to "Second".'
     )
     state["registry"] = registry
     state["content"] = build_content(text, registry, source="timeline.art")
@@ -168,7 +175,7 @@ def timeline_compositions(state):
     content = state["content"]
     state["forms"] = [
         compose(
-            content, output=output, representation="basic", registry=state["registry"]
+            content, output=output, representation="diagram", registry=state["registry"]
         )
         for output in ("image", "report")
     ]
@@ -237,9 +244,8 @@ def run_json_render(state):
         [
             "render",
             str(state["spec_file"]),
-            "--builtin-basic",
             "--representation",
-            "basic",
+            "diagram",
             "--renderer",
             "svg",
             "--output",
