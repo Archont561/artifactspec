@@ -23,7 +23,8 @@ commits retained across a force-push. If the merge base or default branch is
 unavailable, lint fails closed. For a force-push to the default branch, or its
 initial creation, lint checks all commits reachable from HEAD instead: the remote
 default branch points to the new head and cannot be a useful comparison base.
-A manual run without a base also checks all commits reachable from HEAD. An
+A manual run without a base checks commits since the default branch's merge base
+when run on another branch, or all reachable commits on the default branch. An
 unavailable change-scope comparison still runs full CI.
 
 Full CI runs coverage across both packages and uploads `coverage.xml` with the
