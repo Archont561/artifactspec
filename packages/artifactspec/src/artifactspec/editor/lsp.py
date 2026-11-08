@@ -7,10 +7,10 @@ from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import ServerTextPosition, TextDocument
 
-from artifactspec._lines import source_lines
-from artifactspec.discovery import installed_plugins
+from artifactspec.core._lines import source_lines
+from artifactspec.core.validation import Diagnostic, validate
 from artifactspec.plugins import CapabilityCatalog, ManifestCatalog
-from artifactspec.validation import validate
+from artifactspec.plugins.discovery import installed_plugins
 
 
 class _LanguageDocument(TextDocument):
@@ -25,35 +25,37 @@ def _position(document: TextDocument, line: int, column: int) -> types.Position:
     return document.position_to_client_units(ServerTextPosition(line - 1, column - 1))
 
 
+def _diagnostic(document: TextDocument, item: Diagnostic) -> types.Diagnostic:
+    span = item.span
+    return types.Diagnostic(
+        range=types.Range(
+            start=_position(document, span.start.line, span.start.column),
+            end=_position(document, span.end.line, span.end.column),
+        ),
+        message=item.message,
+        severity=types.DiagnosticSeverity.Error
+        if item.severity == "error"
+        else types.DiagnosticSeverity.Warning,
+        code=item.code,
+        source="artifactspec",
+    )
+
+
+def _publish(server: LanguageServer, catalog: CapabilityCatalog, uri: str) -> None:
+    document = server.workspace.get_text_document(uri)
+    result = validate(document.source, catalog, source=uri)
+    server.text_document_publish_diagnostics(
+        types.PublishDiagnosticsParams(
+            uri=uri,
+            diagnostics=[_diagnostic(document, item) for item in result.diagnostics],
+            version=document.version,
+        )
+    )
+
+
 def create_server(catalog: CapabilityCatalog) -> LanguageServer:
     """Create an LSP server which validates against static capability metadata."""
     server = LanguageServer("artifactspec", "0.1.0")
-
-    def publish(uri: str) -> None:
-        document = server.workspace.get_text_document(uri)
-        result = validate(document.source, catalog, source=uri)
-        diagnostics = []
-        for item in result.diagnostics:
-            span = item.span
-            diagnostics.append(
-                types.Diagnostic(
-                    range=types.Range(
-                        start=_position(document, span.start.line, span.start.column),
-                        end=_position(document, span.end.line, span.end.column),
-                    ),
-                    message=item.message,
-                    severity=types.DiagnosticSeverity.Error
-                    if item.severity == "error"
-                    else types.DiagnosticSeverity.Warning,
-                    code=item.code,
-                    source="artifactspec",
-                )
-            )
-        server.text_document_publish_diagnostics(
-            types.PublishDiagnosticsParams(
-                uri=uri, diagnostics=diagnostics, version=document.version
-            )
-        )
 
     @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
     def did_open(params: types.DidOpenTextDocumentParams) -> None:
@@ -69,11 +71,11 @@ def create_server(catalog: CapabilityCatalog) -> LanguageServer:
             language_id=item.language_id,
             position_codec=original.position_codec,
         )
-        publish(item.uri)
+        _publish(server, catalog, item.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
     def did_change(params: types.DidChangeTextDocumentParams) -> None:
-        publish(params.text_document.uri)
+        _publish(server, catalog, params.text_document.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
     def did_close(params: types.DidCloseTextDocumentParams) -> None:
@@ -88,7 +90,7 @@ def start(*, builtin_basic: bool = False) -> None:
     """Start the server over standard input and output."""
     manifests = [item[1] for item in installed_plugins().values()]
     if builtin_basic:
-        from artifactspec._basic_metadata import basic_manifest
+        from artifactspec.plugins._basic_metadata import basic_manifest
 
         manifests.append(basic_manifest())
     catalog = ManifestCatalog(manifests)

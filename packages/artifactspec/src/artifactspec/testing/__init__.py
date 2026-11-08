@@ -1,8 +1,8 @@
 """Recording fake phase contexts for plugin authors."""
 
-from artifactspec._contexts import RendererBuilder, RepresentationBuilder, nonempty
-from artifactspec.models import Content
-from artifactspec.syntax import SourceSpan
+from artifactspec.core._contexts import RendererBuilder, RepresentationBuilder, nonempty
+from artifactspec.core.models import Content
+from artifactspec.core.syntax import SourceSpan
 
 
 class FakePhraseContext:

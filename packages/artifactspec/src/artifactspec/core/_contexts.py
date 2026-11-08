@@ -1,7 +1,7 @@
 """Core context implementations; plugins depend only on public protocols."""
 
-from artifactspec.models import Composition, Content, ContentNode, VisualElement
-from artifactspec.syntax import SourceSpan
+from artifactspec.core.models import Composition, Content, ContentNode, VisualElement
+from artifactspec.core.syntax import SourceSpan
 
 
 def nonempty(value: str, label: str) -> None:
@@ -71,7 +71,7 @@ class RepresentationBuilder:
         size: float = 20,
         color: str = "black",
     ) -> None:
-        from artifactspec.models import TextElement
+        from artifactspec.core.models import TextElement
 
         if not isinstance(value, str):
             raise TypeError("text must be a string")
@@ -91,7 +91,7 @@ class RepresentationBuilder:
         height: float,
         color: str = "black",
     ) -> None:
-        from artifactspec.models import RectangleElement
+        from artifactspec.core.models import RectangleElement
 
         _numbers(x, y, width, height)
         if width <= 0 or height <= 0:
@@ -102,7 +102,7 @@ class RepresentationBuilder:
         )
 
     def finish(self) -> Composition:
-        from artifactspec.models import Composition
+        from artifactspec.core.models import Composition
 
         return Composition(
             self.output,

@@ -1,0 +1,10 @@
+{
+  "schema_version": 2,
+  "id": "svg",
+  "version": "0.1.0",
+  "outputs": ["image"],
+  "phrases": [],
+  "properties": [],
+  "representations": [],
+  "renderers": [{"name": "svg", "outputs": ["image"]}]
+}

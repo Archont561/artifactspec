@@ -8,20 +8,29 @@ ArtifactSpec is an early-stage Python project for describing and producing visua
 artifacts with an agent-friendly language. The intended design separates semantic
 content, representations, composition, and rendering.
 
-**Current status:** the core provides a plugin registry, a CLI for static
-capability discovery, an output-aware parser, reference and declared-type
-validation, and a validation CLI and language server. The Manim distribution
-remains a version-only placeholder. Plugin phase contexts and rendering are not
-yet implemented. Both package roots expose `VERSION` from distribution metadata.
+**Current status:** the core provides plugin registration, static capability
+discovery, parsing, validation, editor diagnostics, and a rendering pipeline.
+The optional `artifactspec-svg` distribution renders static SVG; the Manim
+distribution remains a version-only placeholder. Package roots expose `VERSION`
+from distribution metadata.
 
 Run `artifactspec capabilities --details` to inspect installed plugin metadata
 without importing plugin code, or `artifactspec validate <file>` to validate a
-specification. `artifactspec lsp` starts the editor diagnostics server. See [plugin registration and discovery](docs/plugins.md)
-and the [initial language and parser contract](docs/language.md).
+specification. `artifactspec lsp` starts the editor diagnostics server. Rendering
+automatically imports installed plugins, which execute arbitrary Python; install
+only trusted plugins or use `--no-plugin-autoload` to select them explicitly.
+See [plugin registration and discovery](docs/plugins.md), the
+[language contract](docs/language.md), and [rendering](docs/rendering.md).
+
+Python modules now live under `artifactspec.core`, `artifactspec.plugins`,
+`artifactspec.editor`, `artifactspec.testing`, and `artifactspec.cli`; old flat
+module imports are not retained. Update imports when upgrading.
 
 ## Repository guide
 
 - [`packages/artifactspec`](packages/artifactspec/README.md) — core package.
+- [`packages/artifactspec-svg`](packages/artifactspec-svg/README.md) — optional
+  static SVG renderer plugin.
 - [`packages/artifactspec-manim`](packages/artifactspec-manim/README.md) —
   renderer placeholder; it has no Manim dependency.
 - [`backlog`](backlog/README.md) — product specification, decisions, milestones,
@@ -43,11 +52,12 @@ pixi run --locked bun-install
 pixi run --locked install-projects
 pixi run --locked test
 pixi run --locked test-manim
+pixi run --locked test-svg
 pixi run --locked test-scripts
 pixi run --locked coverage-all
 ```
 
-The full coverage task requires at least **91% total line coverage** across both
+The full coverage task requires at least **91% total line coverage** across all three
 package source trees. The number does not measure scripts or prove visual correctness. See
 [CI](docs/ci.md) for the full check matrix and coverage scope.
 

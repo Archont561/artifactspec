@@ -37,14 +37,15 @@ PYTHONPATH = '$(IFS=; set -f; python ${PIXI_PROJECT_ROOT}/scripts/activate.py)'
 
 [tasks]
 # Install only local project wheels, without dependency resolution or network access.
-install-projects = "python -m pip install --no-deps --no-build-isolation --force-reinstall ./packages/artifactspec ./packages/artifactspec-manim"
+install-projects = "python -m pip install --no-deps --no-build-isolation --force-reinstall ./packages/artifactspec ./packages/artifactspec-manim ./packages/artifactspec-svg"
 test = { cmd = "python -m pytest packages/artifactspec/tests", depends-on = ["install-projects"] }
 test-scripts = { cmd = "python -m pytest scripts/tests", depends-on = ["bun-install"] }
+test-svg = { cmd = "python -m pytest packages/artifactspec-svg/tests", depends-on = ["install-projects"] }
 test-manim = { cmd = "python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
-coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects", "bun-install"] }
+coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests packages/artifactspec-svg/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov=packages/artifactspec-svg/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects", "bun-install"] }
 lint = "ruff check ."
 format-check = "ruff format --check ."
-typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src"
+typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src packages/artifactspec-svg/src"
 audit = "pip-audit --local --skip-editable"
 check-packages = "python scripts/check_packages.py"
 alint = "alint check"

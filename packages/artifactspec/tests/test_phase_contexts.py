@@ -4,11 +4,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from artifactspec.pipeline import PipelineError, build_content
+from artifactspec.core.pipeline import PipelineError, build_content
 from artifactspec.plugins import ManifestCatalog, Plugin, Registry
 from artifactspec.testing import FakePhraseContext, FakePropertyContext
 
-pytest_plugins = ["artifactspec.pytest_plugin"]
+pytest_plugins = ["artifactspec.testing.pytest_plugin"]
 
 
 def make_registry(phrase, property_handler):

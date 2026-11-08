@@ -71,48 +71,55 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
         "outputs": _outputs(data["outputs"], "outputs"),
     }
     for kind in KINDS:
-        entries = data[kind]
-        if not isinstance(entries, list):
-            raise RegistrationError(f"{kind} must be a list")
-        normalized = []
-        seen = set()
-        for item in entries:
-            fields = {"name", "outputs"}
-            if schema_version == 2 and kind == "phrases":
-                fields.add("object_type")
-            if schema_version == 2 and kind == "properties":
-                fields.add("target_types")
-            if not isinstance(item, dict) or set(item) != fields:
-                required = (
-                    "name and outputs"
-                    if schema_version == 1
-                    else ", ".join(sorted(fields))
-                )
-                raise RegistrationError(
-                    f"each {kind} contribution must have {required}"
-                )
-            name = _name(item["name"], f"{kind} name")
-            if name in seen:
-                raise RegistrationError(
-                    f"duplicate {kind} contribution {name!r} in plugin {plugin_id!r}"
-                )
-            seen.add(name)
-            outputs = _outputs(item["outputs"], f"{kind} outputs")
-            if not set(outputs).issubset(result["outputs"]):
-                raise RegistrationError(
-                    f"{kind} contribution {name!r} declares unsupported outputs"
-                )
-            contribution: dict[str, Any] = {"name": name, "outputs": outputs}
-            if schema_version == 2 and kind == "phrases":
-                contribution["object_type"] = _name(item["object_type"], "object type")
-            if schema_version == 2 and kind == "properties":
-                target_types = _outputs(item["target_types"], "target types")
-                if not target_types:
-                    raise RegistrationError("target types must not be empty")
-                contribution["target_types"] = target_types
-            normalized.append(contribution)
-        result[kind] = sorted(normalized, key=lambda item: item["name"])
+        result[kind] = _normalize_entries(
+            data[kind], kind, schema_version, result["outputs"], plugin_id
+        )
     return result
+
+
+def _normalize_entries(
+    entries: Any,
+    kind: str,
+    schema_version: int,
+    plugin_outputs: list[str],
+    plugin_id: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(entries, list):
+        raise RegistrationError(f"{kind} must be a list")
+    normalized = []
+    seen = set()
+    for item in entries:
+        fields = {"name", "outputs"}
+        if schema_version == 2 and kind == "phrases":
+            fields.add("object_type")
+        if schema_version == 2 and kind == "properties":
+            fields.add("target_types")
+        if not isinstance(item, dict) or set(item) != fields:
+            required = (
+                "name and outputs" if schema_version == 1 else ", ".join(sorted(fields))
+            )
+            raise RegistrationError(f"each {kind} contribution must have {required}")
+        name = _name(item["name"], f"{kind} name")
+        if name in seen:
+            raise RegistrationError(
+                f"duplicate {kind} contribution {name!r} in plugin {plugin_id!r}"
+            )
+        seen.add(name)
+        outputs = _outputs(item["outputs"], f"{kind} outputs")
+        if not set(outputs).issubset(plugin_outputs):
+            raise RegistrationError(
+                f"{kind} contribution {name!r} declares unsupported outputs"
+            )
+        contribution: dict[str, Any] = {"name": name, "outputs": outputs}
+        if schema_version == 2 and kind == "phrases":
+            contribution["object_type"] = _name(item["object_type"], "object type")
+        if schema_version == 2 and kind == "properties":
+            target_types = _outputs(item["target_types"], "target types")
+            if not target_types:
+                raise RegistrationError("target types must not be empty")
+            contribution["target_types"] = target_types
+        normalized.append(contribution)
+    return sorted(normalized, key=lambda item: item["name"])
 
 
 def check_conflicts(manifests: Iterable[dict[str, Any]]) -> None:
@@ -280,12 +287,32 @@ class Registry:
 
     def load_installed(self, plugin_id: str) -> None:
         """Import one installed entry point after the caller has approved it."""
-        from artifactspec.discovery import installed_plugins
+        from artifactspec.plugins.discovery import installed_plugins
 
-        installed = installed_plugins()
+        installed = installed_plugins(only={plugin_id})
         if plugin_id not in installed:
             raise RegistrationError(f"installed plugin {plugin_id!r} not found")
         entry_point, manifest = installed[plugin_id]
+        check_conflicts([*self.manifests(), manifest])
+        self._load_entry(plugin_id, entry_point, manifest)
+
+    def load_all_installed(self, *, required: Iterable[str] = ()) -> None:
+        """Load all installed entry points; installation grants runtime trust."""
+        from artifactspec.plugins.discovery import installed_plugins
+
+        installed = installed_plugins()
+        for plugin_id in required:
+            if plugin_id not in installed:
+                raise RegistrationError(f"installed plugin {plugin_id!r} not found")
+        check_conflicts(
+            [*self.manifests(), *(manifest for _, manifest in installed.values())]
+        )
+        for plugin_id, (entry_point, manifest) in installed.items():
+            self._load_entry(plugin_id, entry_point, manifest)
+
+    def _load_entry(
+        self, plugin_id: str, entry_point: Any, manifest: dict[str, Any]
+    ) -> None:
         try:
             plugin = entry_point.load()
         except Exception as exc:

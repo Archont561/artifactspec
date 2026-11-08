@@ -10,7 +10,7 @@ from artifactspec.cli import app
 
 @pytest.mark.parametrize(
     "extra,expected",
-    [([], "select trusted plugins"), (["--plugin", "not-installed"], "not found")],
+    [(["--plugin", "not-installed"], "not found")],
 )
 def test_render_requires_explicit_known_plugins(tmp_path, extra, expected):
     source = tmp_path / "source.art"
@@ -124,7 +124,7 @@ def test_cli_loads_only_explicitly_approved_installed_plugin(
     source_code = f"""from pathlib import Path
 Path({str(marker)!r}).write_text("loaded")
 from artifactspec.plugins import Plugin
-from artifactspec.basic import _svg
+from artifactspec_svg.renderer import render_svg as _svg
 plugin = Plugin("example", "1.0", outputs=("image",), schema_version=2)
 @plugin.phrase("text", object_type="text")
 def create(ctx):
@@ -155,9 +155,10 @@ plugin.renderer("external-svg")(_svg)
         "external",
         "--renderer",
         "external-svg",
+        "--no-plugin-autoload",
     ]
     rejected = CliRunner().invoke(app, args)
-    assert rejected.exit_code == 2
+    assert rejected.exit_code != 0
     assert not marker.exists()
     accepted = CliRunner().invoke(app, [*args, "--plugin", "example"])
     assert accepted.exit_code == 0, accepted.output
@@ -168,7 +169,7 @@ plugin.renderer("external-svg")(_svg)
 def test_builtin_capabilities_and_validation_use_static_metadata(tmp_path, monkeypatch):
     import sys
 
-    monkeypatch.delitem(sys.modules, "artifactspec.basic", raising=False)
+    monkeypatch.delitem(sys.modules, "artifactspec.plugins.basic", raising=False)
     caps = CliRunner().invoke(
         app, ["capabilities", "--builtin-basic", "--details", "--output", "image"]
     )
@@ -185,12 +186,12 @@ def test_builtin_capabilities_and_validation_use_static_metadata(tmp_path, monke
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["valid"] is True
-    assert "artifactspec.basic" not in sys.modules
+    assert "artifactspec.plugins.basic" not in sys.modules
 
 
 def test_builtin_static_metadata_matches_runtime_plugin():
-    from artifactspec._basic_metadata import basic_manifest
-    from artifactspec.basic import basic_plugin
+    from artifactspec.plugins._basic_metadata import basic_manifest
+    from artifactspec.plugins.basic import basic_plugin
 
     assert basic_manifest() == basic_plugin().manifest()
 
@@ -209,7 +210,7 @@ def test_cli_reports_legacy_warnings_and_explicit_no_fallback(
         "renderers": [{"name": "legacy-svg", "outputs": []}],
     }
     source_code = """from artifactspec.plugins import Plugin
-from artifactspec.basic import _svg
+from artifactspec_svg.renderer import render_svg as _svg
 plugin = Plugin("example", "1.0", outputs=("image",))
 @plugin.phrase("text")
 def create(ctx):

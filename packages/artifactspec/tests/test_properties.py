@@ -7,8 +7,9 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from artifactspec.lsp import _LanguageDocument, _position
-from artifactspec.parser import ParseError, parse
+from artifactspec.core.parser import ParseError, parse
+from artifactspec.core.validation import validate
+from artifactspec.editor.lsp import _LanguageDocument, _position
 from artifactspec.plugins import (
     ManifestCatalog,
     Plugin,
@@ -17,7 +18,6 @@ from artifactspec.plugins import (
     filter_manifests,
     validate_manifest,
 )
-from artifactspec.validation import validate
 
 letters = string.ascii_letters
 identifier = st.builds(
@@ -182,7 +182,7 @@ def test_capability_discovery_matches_filtered_static_metadata(
 ):
     from unittest.mock import patch
 
-    from artifactspec import discovery
+    from artifactspec.plugins import discovery
 
     manifest = {
         "schema_version": 1,
@@ -241,6 +241,8 @@ def test_command_discovery_registers_all_public_modules(names):
         previous = {
             name: sys.modules.pop(name) for name in module_names if name in sys.modules
         }
+        absent = object()
+        previous_attributes = {name: getattr(commands, name, absent) for name in names}
         try:
             with patch.object(commands, "__path__", [directory]):
                 app = create_app()
@@ -257,6 +259,12 @@ def test_command_discovery_registers_all_public_modules(names):
             for module_name in module_names:
                 sys.modules.pop(module_name, None)
             sys.modules.update(previous)
+            for name, value in previous_attributes.items():
+                if value is absent:
+                    if hasattr(commands, name):
+                        delattr(commands, name)
+                else:
+                    setattr(commands, name, value)
 
 
 @settings(max_examples=25, deadline=None)
@@ -292,7 +300,7 @@ def test_nested_command_trees_invoke_the_correct_leaf(depth, text):
 def test_source_lines_preserve_content_and_only_split_lsp_newlines(text):
     import re
 
-    from artifactspec._lines import source_lines
+    from artifactspec.core._lines import source_lines
 
     lines = source_lines(text)
     assert "".join(lines) == text

@@ -8,9 +8,9 @@ from typing import Annotated
 
 import typer
 
-from artifactspec.discovery import installed_plugins
+from artifactspec.core.validation import validate
 from artifactspec.plugins import ManifestCatalog, RegistrationError
-from artifactspec.validation import validate
+from artifactspec.plugins.discovery import installed_plugins
 
 app = typer.Typer()
 
@@ -36,7 +36,7 @@ def validate_file(
         text = path.read_text(encoding="utf-8")
         manifests = [item[1] for item in installed_plugins().values()]
         if builtin_basic:
-            from artifactspec._basic_metadata import basic_manifest
+            from artifactspec.plugins._basic_metadata import basic_manifest
 
             manifests.append(basic_manifest())
         catalog = ManifestCatalog(manifests)

@@ -43,7 +43,7 @@ def registered_capabilities(state):
 
 
 def parse_input(state, text):
-    from artifactspec.parser import ParseError, parse
+    from artifactspec.core.parser import ParseError, parse
 
     try:
         state["document"] = parse(text, state["registry"], source="scene.image")
@@ -86,7 +86,7 @@ def incompatible_phrase(state):
 
 @then("the document has typed statements and source locations")
 def typed_document(state):
-    from artifactspec.syntax import CreateStatement, SetStatement
+    from artifactspec.core.syntax import CreateStatement, SetStatement
 
     document = state["document"]
     assert document.output == "image"

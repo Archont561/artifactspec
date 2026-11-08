@@ -84,11 +84,24 @@ def installed_plugin(state, installed_plugin_factory):
 
 
 @given("no installed plugins")
-def no_installed_plugins(state, tmp_path):
+def no_installed_plugins(state, tmp_path, monkeypatch):
+    from importlib import metadata
+
+    monkeypatch.setattr(metadata, "entry_points", lambda **kwargs: [])
     state["path"] = tmp_path
+    state["empty"] = True
 
 
 def run_cli(state, *args):
+    if state.get("empty"):
+        from typer.testing import CliRunner
+
+        from artifactspec.cli import app
+
+        result = CliRunner().invoke(app, ["capabilities", *args])
+        assert result.exit_code == 0, result.output
+        state["result"] = json.loads(result.stdout)
+        return
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join([str(state["path"]), env.get("PYTHONPATH", "")])
     result = subprocess.run(

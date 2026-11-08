@@ -2,14 +2,20 @@
 
 ## Trust boundary
 
-Plugins are executable Python and are **not sandboxed**. Only load or explicitly
-register code after the user has approved the plugin and its distribution and
-dependencies. Discovery reads installed distribution metadata and JSON manifests;
-it does not import plugin modules or invoke entry points. Metadata is untrusted
-self-reported information, not proof of safety, correctness, or compatibility.
-Normal Python startup, environment setup, and package installation may themselves
-execute code; custom Python distribution finders may also execute while metadata
-is enumerated. Discovery cannot sandbox those operations.
+Plugins are executable Python and are **not sandboxed**. Rendering automatically
+imports all installed ArtifactSpec plugins by default: installation is therefore
+authorization to execute that code during rendering. Review the distribution
+and its dependencies before installing it. Use `--no-plugin-autoload` and
+`--plugin ID` to load only explicitly selected plugins. The Python API continues
+to require explicit `Registry` registration or loading.
+
+Capability discovery, validation, and the language server read installed
+metadata and JSON manifests; they do not import plugin modules or invoke entry
+points. Metadata is untrusted self-reported information, not proof of safety,
+correctness, or compatibility. Normal Python startup, environment setup, and
+package installation may themselves execute code; custom Python distribution
+finders may also execute while metadata is enumerated. Discovery cannot sandbox
+those operations.
 
 ## Identity and static metadata
 
@@ -91,7 +97,7 @@ plugin.phrase("circle", object_type="circle")(lambda context: None)
 plugin.property("color", target_types=("circle",))(lambda context: None)
 ```
 
-Metadata must still match exactly when explicitly loading a trusted plugin.
+Metadata must still match exactly when loading a plugin at runtime.
 `ManifestCatalog` accepts validated static manifests for parsing or validation
 without importing plugin modules or invoking handlers.
 
@@ -120,33 +126,22 @@ The decorators also support `property` and `representation`. They return the
 original callable. Registration validates the whole plugin before modifying the
 registry and freezes its contributions. `registry.handler(kind, name, output=...)`
 returns a registered callable only when it is compatible with the requested output.
-Discovery of explicitly registered
-plugins uses `registry.manifests()`. To load an installed plugin, explicitly
-call `registry.load_installed("example")` only after approval. This imports its
-entry point, and rejects it unless the resulting `Plugin` metadata exactly
-matches the static manifest. Import-time side effects cannot be undone even if
-validation fails. Imports use Python's normal module search path, so shadowed
-modules can execute before the metadata comparison; approval must cover the
-actual import environment as well as the distribution. Discovery does not load
-or register plugins automatically.
+Discovery of explicitly registered plugins uses `registry.manifests()`.
+`registry.load_installed("example")` imports a selected plugin, while
+`registry.load_all_installed()` imports every installed plugin. Both compare
+the resulting `Plugin` with its static manifest. The latter checks installed
+metadata conflicts before importing any entry point. An error importing a later
+plugin cannot undo code already executed by earlier plugins. With autoload
+disabled, selecting one plugin checks only that plugin's installed metadata,
+so an unrelated conflicting plugin need not be loaded. Imports use Python's
+normal module search path; shadowed modules may execute before the manifest
+comparison.
 
-Phase-specific context protocols, their operations, fake contexts, and test
-helpers are planned in ART-5, not implemented here. Illustratively, a phrase
-handler will receive a parsing/semantic context rather than a private core AST
-class, and a renderer will receive a renderer-phase context rather than the
-parser's context. For example, the eventual interfaces might resemble the
-following **pseudocode**, not an importable API or committed method names:
-
-```python
-class PhraseContext(Protocol):
-    def record_operation(self, name: str) -> None: ...
-
-class RendererContext(Protocol):
-    def emit_output(self, data: bytes) -> None: ...
-```
-
-Only phase-appropriate operations should be exposed. Exact methods, signatures,
-and injection are undecided; the registration examples are not working renderers.
+Public phase protocols live in `artifactspec.core.contexts`; fake contexts and
+pytest helpers live in `artifactspec.testing` and
+`artifactspec.testing.pytest_plugin`. See `docs/rendering.md` for their
+contracts. The SVG backend is an independently installed `artifactspec-svg`
+distribution; no SVG backend is embedded in the core package.
 
 ## CLI and JSON
 
@@ -160,6 +155,6 @@ under `capabilities`, with keys `phrases`, `properties`, `representations`, and
 objects. `--output svg` retains only plugins declaring `svg` and contributions
 compatible with it; the output list on each returned plugin is narrowed to the
 requested output. Empty results use an empty `plugins` array. Discovery errors
-produce a nonzero exit and a diagnostic on stderr, not partial JSON. The CLI
-never imports installed plugins. Plugin code may report inaccurate metadata;
-loading and manifest comparison are a separate, explicitly trusted operation.
+produce a nonzero exit and a diagnostic on stderr, not partial JSON. The capability command does not import installed plugins. Plugin code may
+report inaccurate metadata; runtime rendering loads code separately as described
+above.

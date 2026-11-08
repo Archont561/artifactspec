@@ -200,8 +200,8 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
         },
     )
     server_diagnostic = client.receive()["params"]["diagnostics"][0]
+    from artifactspec.core.validation import validate
     from artifactspec.plugins import ManifestCatalog
-    from artifactspec.validation import validate
 
     result = validate(
         'Output image.\nSet color of missing to "red".',

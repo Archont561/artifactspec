@@ -1,11 +1,11 @@
 ---
 id: ART-15
 title: 'Expose render provenance, warnings, and fidelity limitations'
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 02:48'
-updated_date: '2026-11-08 17:37'
+updated_date: '2026-11-08 17:58'
 labels: []
 milestone: m-4
 dependencies:
@@ -27,18 +27,24 @@ Agents need to know which rendering choices were made and whether a result was d
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Render results identify selected backend and representation and expose warnings and fallback decisions.
-- [ ] #2 Where source links exist, results expose inspectable provenance; unavailable provenance is reported honestly.
-- [ ] #3 Tests cover full-fidelity, fallback or unsupported-feature, and error cases with machine-readable results.
+- [x] #2 Where source links exist, results expose inspectable provenance; unavailable provenance is reported honestly.
+- [x] #3 Tests cover full-fidelity, fallback or unsupported-feature, and error cases with machine-readable results.
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Reassess existing result fields and tests. 2. Specify how unavailable provenance is distinguished from an empty source set. 3. Define and test machine-readable success, limitation, and error results without claiming visual fidelity.
+1. Define an additive provenance status scoped to composition elements and document that it is not artifact-level mapping. 2. Preserve the existing default CLI behavior; add an opt-in JSON format for structured post-argument-parsing failures, preserving exit codes and diagnostics. 3. Write BDD and generated or parametrized tests first for available, partial, unavailable and empty composition provenance; successful lossless examples, reported limitations, unsupported features and errors. 4. Implement and document the contract without inferring visual fidelity or automatic fallback; verify all acceptance criteria and quality gates.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Reassessment: successful JSON render results identify renderer and representation, warnings and explicit null fallback; an installed legacy plugin test verifies warning propagation. Source spans are exposed, but an empty provenance list cannot distinguish unavailable provenance from no source-linked elements. Render failures currently emit text on stderr, not a machine-readable result; full-fidelity and unsupported/error result coverage therefore remain open.
+The result reports available, partial, unavailable, or no-elements source links for composition elements only, not artifact-byte provenance. Opt-in JSON mode returns structured success and post-argument-parsing failures with phase codes, diagnostics, accumulated warnings and known limitations; no automatic fallback is supported. Default error output remains text. No reported limitations is not a fidelity guarantee. BDD and generated tests cover source-link states, an exact synthetic SVG example, limitations, unsupported capability and phase failures, warning propagation, and preservation of existing output. Full suite: 307 passed, 96.82% coverage; Python 3.11 targeted suite: 33 passed; isolated installed-package JSON success/failure and package checks passed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added composition-scoped provenance availability and opt-in machine-readable failure results while preserving default CLI error behavior. Verified with BDD, property and integration tests, an exact synthetic SVG case, full coverage and installed-package smoke tests.
+<!-- SECTION:FINAL_SUMMARY:END -->

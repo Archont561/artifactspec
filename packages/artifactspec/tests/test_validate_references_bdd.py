@@ -41,7 +41,7 @@ def legacy_plugin(state):
 
 
 def check(state, text):
-    from artifactspec.validation import validate
+    from artifactspec.core.validation import validate
 
     state["result"] = validate(text, state["registry"], source="scene.art")
 

@@ -1,15 +1,19 @@
 # Rendering and plugin phase contracts
 
 ArtifactSpec has a deliberately small static rendering slice. It validates the
-controlled language, executes explicitly trusted plugin handlers to construct
+controlled language, executes plugin handlers to construct
 semantic content, selects one representation and one renderer, and writes a
 single artifact. It does **not** support animation, playback, narration, a
 report renderer, arbitrary layout, or semantic values other than strings.
 
-## Explicit trust and a first SVG
+## Plugin trust and a first SVG
 
-The built-in `builtin-basic` plugin is **not automatically loaded** and is not
-listed by installed-plugin discovery. Choose it explicitly for rendering:
+Install the separately distributed `artifactspec-svg` plugin alongside
+`artifactspec` (for example, `python -m pip install artifactspec artifactspec-svg`
+once the distributions are available). The plugin provides the `svg` renderer; its SVG syntax
+serialization is separate from the renderer adapter and the core semantic
+content model. For the built-in generic content and representation, select
+`--builtin-basic`:
 
 ```sh
 artifactspec render scene.art --builtin-basic \
@@ -30,27 +34,82 @@ Set date of opening to "1989-11-09".
 Set value of opening to "Berlin Wall opens".
 ```
 
-Alternatively, repeat `--plugin ID` for each installed plugin you explicitly
-trust. Static discovery, validation, and the language server only inspect installed
-manifests by default. Pass `--builtin-basic` to `capabilities`, `validate`, or
-`lsp` to include the built-in static manifest without loading plugin handlers. The render
-command first loads **only** the selected plugin IDs and checks their runtime
-manifest against the static manifest. Plugin handlers are arbitrary trusted
-Python and are **not sandboxed**; selecting a plugin authorizes executing its
-code. The `--builtin-basic` flag explicitly authorizes the first-party plugin.
+Rendering automatically imports every installed ArtifactSpec plugin by default,
+like pytest plugin autoload. **Installation therefore authorizes execution** of
+all installed plugin code during rendering, including plugins not selected as the
+renderer. Plugins are arbitrary Python and are **not sandboxed**. To load only
+selected plugins, pass `--no-plugin-autoload` and repeat `--plugin ID`:
 
-The command prints a version 1 JSON result with output, representation and
-renderer names and an explicit `fallback: null` (fallback is not supported);
-artifact path, media type and editable flag; source-linked
-validation warnings; textual `limitations`; and the source spans contributing
-to emitted elements. Exit 0 means success, 1 means specification validation
-failed, and 2 means plugin, representation, renderer, I/O or usage failure.
-Diagnostics and operational errors go to stderr. Output file paths must have
+```sh
+artifactspec render scene.art --builtin-basic --no-plugin-autoload \
+  --plugin svg --representation basic --renderer svg --output scene.svg
+```
+
+With autoload disabled, no installed plugin executes unless explicitly named.
+Static discovery, validation, and the language server read installed manifests
+without importing plugin handlers. Use `--builtin-basic` with `capabilities`,
+`validate`, or `lsp` to add its static metadata. Runtime loading checks the
+plugin declaration against its manifest, but this happens after import-time
+side effects. Manifest metadata does not establish that a plugin is safe.
+
+By default, the command prints a version 1 JSON success result, while
+diagnostics and operational errors go to stderr. Add `--format json` for
+machine-readable successes **and** failures:
+
+```sh
+artifactspec render scene.art --builtin-basic --representation basic \
+  --renderer svg --output scene.svg --format json
+```
+
+In JSON mode, the command writes one JSON object to stdout after argument
+parsing. Success adds `status: "success"` to the existing result. Failure has
+`status: "error"`, `error` with a stable `code` and descriptive `message`,
+`diagnostics`, `warnings`, `limitations`, and `fallback: null`. Diagnostics
+and warnings include source spans where available. Limitations include those
+reported before a failed phase; their absence does not certify that a failed
+phase had none. Validation warnings are also included in `diagnostics` when
+validation fails. No artifact field is returned on failure. Trusted plugin code
+can itself write to stdout or have side effects; it is not sandboxed.
+
+The codes are `validation_failed`, `capability_selection_failed`,
+`phrase_failed`, `property_failed`, `representation_failed`, `renderer_failed`,
+`output_write_failed`, `plugin_error`, `io_error`, and the generic
+`pipeline_failed`. The Python API still raises `PipelineError`, which exposes
+`code`, `diagnostics`, `warnings`, and `limitations` where known. These codes
+classify the failing phase; they do not imply a successful fallback. Exit 0
+means success, 1 means specification validation failed, and 2 means plugin,
+representation, renderer, I/O or usage failure. Errors raised by Typer while
+parsing arguments, including missing options or an invalid format, remain
+human-readable on stderr even with `--format json`. Output file paths must have
 an existing parent directory.
+
+The success result identifies the output, representation, renderer, artifact
+path, media type and editable flag, source-linked validation warnings,
+limitations, and an explicit `fallback: null` (fallback is not supported).
+`provenance` and `provenance_status` describe source links on **composition
+elements**, not a verified mapping to artifact bytes:
+
+- `available`: every composition element has at least one source span.
+- `partial`: some, but not all, elements have source spans.
+- `unavailable`: elements exist but none has a source span.
+- `no_elements`: the composition contains no elements; this does not imply the
+  renderer emitted an empty artifact.
+
+The provenance list aggregates unique spans from the composition in encounter
+order. A renderer may omit, alter, or add output independently, so even
+`available` does not establish complete artifact-level provenance. Results
+returned by `render` always set one of these statuses. An externally constructed
+`RenderResult` may leave its status as `None` (not reported).
+
+Limitations are reported by plugins, not independently verified. An empty list
+means none was reported, **not** that the artifact is visually faithful,
+factually correct, or complete. A limited synthetic backend can be tested for
+exact output, but that does not certify other backends. Inspect the artifact and
+perform factual review separately.
 
 ## Phase interfaces
 
-`artifactspec.contexts` provides public protocols; plugin code should accept
+`artifactspec.core.contexts` provides public protocols; plugin code should accept
 these rather than importing private core implementations:
 
 - `PhraseContext` supplies the object name and optional source span and requires
@@ -68,7 +127,7 @@ these rather than importing private core implementations:
   media type and editable flag.
 
 `artifactspec.testing` supplies recording fake contexts for each phase. Pytest
-fixtures are opt-in: declare `pytest_plugins = ["artifactspec.pytest_plugin"]`
+fixtures are opt-in: declare `pytest_plugins = ["artifactspec.testing.pytest_plugin"]`
 then use `artifactspec_phrase_context`, `artifactspec_property_context`,
 `artifactspec_representation_context`, or `artifactspec_renderer_context` as
 factories. The fake renderer holds bytes in memory; it does not write files.
@@ -108,8 +167,8 @@ historical timeline is not an animation timeline.
 `render` requires an explicit representation, renderer and destination. It
 checks both selections before running content handlers. The registry enforces declared output compatibility; missing or incompatible
 contributions and unsupported elements fail, with **no automatic fallback**.
-The basic representation supports text, rectangles, and dated events; the SVG renderer
-supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
+The basic representation supports text, rectangles, and dated events; the
+separate SVG renderer supports `image` only. Its fixed 640-by-480 canvas does not wrap or measure
 text and reports this limitation; excess rows are rejected. The renderer allows
 a limited set of named colors or hexadecimal colors, rejects unsupported colors and
 characters forbidden in XML, and escapes text. It preserves editable SVG source,

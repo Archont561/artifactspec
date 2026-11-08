@@ -9,12 +9,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from artifactspec.basic import basic_plugin
 from artifactspec.cli import app
-from artifactspec.models import Content, ContentNode
-from artifactspec.pipeline import PipelineError, build_content
+from artifactspec.core.models import Content, ContentNode
+from artifactspec.core.pipeline import PipelineError, build_content
+from artifactspec.core.rendering import compose
 from artifactspec.plugins import Registry
-from artifactspec.rendering import compose
+from artifactspec.plugins.basic import basic_plugin
 
 
 def registry():
@@ -151,9 +151,9 @@ def test_missing_event_date_does_not_replace_existing_artifact(tmp_path):
 
 
 def test_static_validation_does_not_claim_to_check_calendar_values():
-    from artifactspec._basic_metadata import basic_manifest
+    from artifactspec.core.validation import validate
     from artifactspec.plugins import ManifestCatalog
-    from artifactspec.validation import validate
+    from artifactspec.plugins._basic_metadata import basic_manifest
 
     text = specification("2024-02-30", "Event")
     assert validate(text, ManifestCatalog([basic_manifest()])).valid

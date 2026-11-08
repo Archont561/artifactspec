@@ -2,16 +2,77 @@
 
 import json
 from dataclasses import asdict
+from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from artifactspec.pipeline import PipelineError
+from artifactspec.core.pipeline import PipelineError
+from artifactspec.core.rendering import render
+from artifactspec.core.validation import Diagnostic
 from artifactspec.plugins import RegistrationError, Registry
-from artifactspec.rendering import render
 
 app = typer.Typer()
+
+
+class OutputFormat(str, Enum):
+    legacy = "legacy"
+    json = "json"
+
+
+def _json(data: dict[str, object]) -> None:
+    typer.echo(json.dumps(data, ensure_ascii=False, sort_keys=True))
+
+
+def _failure_json(
+    code: str,
+    message: str,
+    *,
+    diagnostics: tuple[Diagnostic, ...] = (),
+    warnings: tuple[Diagnostic, ...] = (),
+    limitations: tuple[str, ...] = (),
+) -> None:
+    _json(
+        {
+            "schema_version": 1,
+            "status": "error",
+            "error": {"code": code, "message": message},
+            "diagnostics": [asdict(item) for item in diagnostics],
+            "warnings": [asdict(item) for item in warnings],
+            "limitations": list(limitations),
+            "fallback": None,
+        }
+    )
+
+
+def _pipeline_error(exc: PipelineError, format: OutputFormat) -> None:
+    if format == OutputFormat.json:
+        _failure_json(
+            exc.code,
+            str(exc),
+            diagnostics=exc.diagnostics,
+            warnings=exc.warnings,
+            limitations=exc.limitations,
+        )
+    else:
+        for diagnostic in exc.diagnostics:
+            pos = diagnostic.span.start
+            typer.echo(
+                f"{diagnostic.span.source}:{pos.line}:{pos.column}: {diagnostic.severity} [{diagnostic.code}]: {diagnostic.message}",
+                err=True,
+            )
+        typer.echo(f"artifactspec: {exc}", err=True)
+
+
+def _operational_error(
+    exc: OSError | UnicodeError | RegistrationError, format: OutputFormat
+) -> None:
+    if format == OutputFormat.json:
+        code = "plugin_error" if isinstance(exc, RegistrationError) else "io_error"
+        _failure_json(code, str(exc))
+    else:
+        typer.echo(f"artifactspec: {exc}", err=True)
 
 
 @app.command("render")
@@ -26,6 +87,16 @@ def render_command(
     renderer: Annotated[
         str, typer.Option("--renderer", help="Explicit renderer name.")
     ],
+    format: Annotated[
+        OutputFormat, typer.Option("--format", help="Render result and failure format.")
+    ] = OutputFormat.legacy,
+    no_plugin_autoload: Annotated[
+        bool,
+        typer.Option(
+            "--no-plugin-autoload",
+            help="Do not automatically execute installed plugin code.",
+        ),
+    ] = False,
     builtin_basic: Annotated[
         bool,
         typer.Option(
@@ -36,23 +107,22 @@ def render_command(
         list[str] | None,
         typer.Option(
             "--plugin",
-            help="Trust and load an installed plugin ID; repeat for multiple plugins.",
+            help="Require a plugin ID; with autoload disabled, load only named plugins. Repeat as needed.",
         ),
     ] = None,
 ) -> None:
-    """Validate and render using only explicitly trusted plugins."""
+    """Validate and render with installed plugins or explicitly selected plugins."""
     registry = Registry()
     try:
         if builtin_basic:
-            from artifactspec.basic import basic_plugin
+            from artifactspec.plugins.basic import basic_plugin
 
             registry.register(basic_plugin())
-        for plugin_id in plugin or []:
-            registry.load_installed(plugin_id)
-        if not builtin_basic and not plugin:
-            raise RegistrationError(
-                "select trusted plugins using --builtin-basic or --plugin"
-            )
+        if no_plugin_autoload:
+            for plugin_id in plugin or []:
+                registry.load_installed(plugin_id)
+        else:
+            registry.load_all_installed(required=plugin or ())
         text = path.read_text(encoding="utf-8")
         result = render(
             text,
@@ -63,19 +133,13 @@ def render_command(
             source=str(path),
         )
     except PipelineError as exc:
-        for diagnostic in exc.diagnostics:
-            pos = diagnostic.span.start
-            typer.echo(
-                f"{diagnostic.span.source}:{pos.line}:{pos.column}: {diagnostic.severity} [{diagnostic.code}]: {diagnostic.message}",
-                err=True,
-            )
-        typer.echo(f"artifactspec: {exc}", err=True)
+        _pipeline_error(exc, format)
         raise typer.Exit(code=1 if exc.diagnostics else 2) from exc
     except (OSError, UnicodeError, RegistrationError) as exc:
-        typer.echo(f"artifactspec: {exc}", err=True)
+        _operational_error(exc, format)
         raise typer.Exit(code=2) from exc
     data = asdict(result)
     data["artifact"]["path"] = str(result.artifact.path)
-    typer.echo(
-        json.dumps({"schema_version": 1, **data}, ensure_ascii=False, sort_keys=True)
-    )
+    if format == OutputFormat.json:
+        data["status"] = "success"
+    _json({"schema_version": 1, **data})

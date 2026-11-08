@@ -6,8 +6,8 @@ from importlib import metadata
 
 import pytest
 
-from artifactspec.discovery import capabilities, installed_plugins
 from artifactspec.plugins import Plugin, RegistrationError, Registry, validate_manifest
+from artifactspec.plugins.discovery import capabilities, installed_plugins
 
 
 def manifest():
@@ -118,7 +118,7 @@ def draw(context):
 """
     fixture = installed_plugin_factory(module_source=source)
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    assert list(installed_plugins()) == ["example"]
+    assert "example" in installed_plugins()
     assert capabilities()["plugins"][0]["capabilities"]["phrases"] == 1
     assert (
         capabilities(output="pdf", details=True)["plugins"][0]["capabilities"][
@@ -142,7 +142,7 @@ def test_untrusted_discovery_and_failed_load(installed_plugin_factory, monkeypat
         module_source="raise RuntimeError('unsafe load')\n"
     )
     monkeypatch.syspath_prepend(str(fixture["path"]))
-    assert len(installed_plugins()) == 1
+    assert "example" in installed_plugins()
     with pytest.raises(RegistrationError, match="unsafe load"):
         Registry().load_installed("example")
 
@@ -291,22 +291,23 @@ def test_cli_summary_and_unknown_output(installed_plugin_factory):
     summary = subprocess.run(
         command, env=env, text=True, capture_output=True, check=True
     )
-    assert json.loads(summary.stdout) == {
-        "schema_version": 1,
-        "plugins": [
-            {
-                "id": "example",
-                "version": "1.0",
-                "outputs": ["pdf", "svg"],
-                "capabilities": {
-                    "phrases": 1,
-                    "properties": 0,
-                    "representations": 0,
-                    "renderers": 0,
-                },
-            }
-        ],
-    }
+    assert [
+        item
+        for item in json.loads(summary.stdout)["plugins"]
+        if item["id"] == "example"
+    ] == [
+        {
+            "id": "example",
+            "version": "1.0",
+            "outputs": ["pdf", "svg"],
+            "capabilities": {
+                "phrases": 1,
+                "properties": 0,
+                "representations": 0,
+                "renderers": 0,
+            },
+        }
+    ]
     filtered = subprocess.run(
         command + ["--output", "unknown"],
         env=env,

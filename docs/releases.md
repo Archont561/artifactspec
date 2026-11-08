@@ -17,9 +17,9 @@ pixi run --locked audit
 pixi run --locked coverage-all
 ```
 
-`check-packages` builds wheels and source distributions for both packages in a
+`check-packages` builds wheels and source distributions for all three packages in a
 temporary directory, checks metadata, checks wheel license inclusion, and
-installs the wheels in a clean virtual environment. Both VERSION constants are
+installs the wheels in a clean virtual environment. All three VERSION constants are
 checked against their installed metadata in an isolated Python process. The Manim-named package is
 currently a version-only placeholder. Builds and the clean install
 need network access. Hatchling is capped below 1.30 because newer build metadata
