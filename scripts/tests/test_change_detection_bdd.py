@@ -100,6 +100,7 @@ def test_mixed_docs_and_scripts_runs_both(state):
     assert result["scope"] == "scripts"
     assert result["run_scripts"] == "true"
     assert result["run_docs"] == "true"
+    assert result["skip_docs"] == "false"
     assert result["skip_full"] == "true"
 
 
@@ -144,3 +145,14 @@ def test_pull_request_uses_merge_base(state):
     result = run_detection(state, base=updated_base, event="pull_request")
     assert result["scope"] == "docs"
     assert result["paths"] == ["docs/guide.md"]
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_run_docs"),
+    [("docs/guide.md", "true"), ("scripts/check.py", "false"), ("app.py", "false")],
+)
+def test_documentation_flags_are_complements(state, path, expected_run_docs):
+    change_file(state, path)
+    result = run_detection(state)
+    assert result["run_docs"] == expected_run_docs
+    assert result["skip_docs"] == ("false" if expected_run_docs == "true" else "true")

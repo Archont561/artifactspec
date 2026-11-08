@@ -8,13 +8,14 @@ ArtifactSpec is an early-stage Python project for describing and producing visua
 artifacts with an agent-friendly language. The intended design separates semantic
 content, representations, composition, and rendering.
 
-**Current status:** the core provides a plugin registry and a CLI for safe static
-capability discovery. The Manim distribution remains a version-only placeholder.
-The artifact language, phase contexts, validation, and rendering are not yet
-implemented. Both package roots expose `VERSION` from distribution metadata.
+**Current status:** the core provides a plugin registry, a CLI for static
+capability discovery, and a small output-aware parser. The Manim distribution
+remains a version-only placeholder. Semantic validation, phase contexts, and
+rendering are not yet implemented. Both package roots expose `VERSION` from distribution metadata.
 
 Run `artifactspec capabilities --details` to inspect installed plugin metadata
-without importing plugin code. See [plugin registration and discovery](docs/plugins.md).
+without importing plugin code. See [plugin registration and discovery](docs/plugins.md)
+and the [initial language and parser contract](docs/language.md).
 
 ## Repository guide
 
