@@ -1,11 +1,11 @@
 ---
 id: ART-9
 title: Expose concise machine-readable capability discovery
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 02:47'
-updated_date: '2026-11-08 14:12'
+updated_date: '2026-11-08 14:20'
 labels: []
 milestone: m-0
 dependencies:
@@ -44,4 +44,12 @@ An agent needs to discover installed output types and plugin capabilities withou
 Implemented versioned JSON summary/details and output filtering using distribution-recorded static manifests without importing plugin code. Verified empty, installed-wheel, malformed, conflicting, filtered and exact-schema cases. CI matrix expanded to full core suite; remote matrix remains unverified.
 
 The CLI was migrated to Typer at user request. The Pixi manifest now requires a bot-generated lock refresh; locked activation/CI verification is pending. Frozen checks with temporary Typer passed 87 tests (one lock-dependent activation test deselected), and isolated package smoke tests passed for both module and console entry points.
+
+Bot commit 88b149b refreshed pixi.lock. Verified pixi lock --check --offline and the complete locked coverage-all suite: 88 tests passed, 99.53% package coverage on Linux Python 3.13; remote CI still pending.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added Typer-based JSON capability discovery using static manifests without importing plugin code; BDD, installed-wheel and module/console smoke tests pass. After bot relock, the complete locked suite passed (88 tests, 99.53% package coverage); cross-platform CI requires remote verification.
+<!-- SECTION:FINAL_SUMMARY:END -->
