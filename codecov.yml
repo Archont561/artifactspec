@@ -1,0 +1,8 @@
+# Upload is performed by the full CI job; no coverage threshold is imposed yet.
+coverage:
+  status:
+    project: false
+    patch: false
+
+ignore:
+  - "**/tests/**"

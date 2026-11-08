@@ -1,0 +1,3 @@
+# Use gherlint defaults. The strict wrapper fails the task on any finding.
+[reporting]
+disable = []

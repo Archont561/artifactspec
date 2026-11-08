@@ -1,0 +1,22 @@
+.pixi/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Local package-manager cache
+.cache/
+node_modules/
+coverage.xml
+
+# Local Bun cache
+.bun/
+
+# Local source archive
+artifactspec-source.zip
