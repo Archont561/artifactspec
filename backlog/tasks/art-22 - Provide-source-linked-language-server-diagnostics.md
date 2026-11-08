@@ -1,11 +1,11 @@
 ---
 id: ART-22
 title: Provide source-linked language server diagnostics
-status: In Progress
+status: Done
 assignee:
   - '@arena-agent'
 created_date: '2026-11-08 02:48'
-updated_date: '2026-11-08 15:40'
+updated_date: '2026-11-08 15:44'
 labels: []
 milestone: m-2
 dependencies:
@@ -44,4 +44,12 @@ Interactive authors and agents benefit from the same validation rules while edit
 User selected pygls rather than a hand-rolled protocol implementation. Pixi relock will require a separately authorized PR.
 
 Implemented pygls stdio server with static plugin metadata, shared CLI diagnostics, negotiated position encoding and full/incremental document sync. Protocol BDD/unit subprocess tests cover open, fixes, UTF-16 supplementary characters, incremental edits, close, empty document, shutdown and metadata errors; installed wheel smoke includes LSP creation. Python 3.11 core: 97 passed. Linux Python 3.13: 155 passed, 1 lock-dependent test deselected, 97.67% coverage; quality and package checks passed. Full locked verification is blocked until the relock bot updates pixi.lock; retain In Progress until then.
+
+Relock bot updated pixi.lock. Full locked Linux Python 3.13 coverage passed 156 tests at 97.67%; isolated wheel/sdist smoke, Python 3.11 core suite (97 tests), lint, type, Gherkin and policy checks passed. Bot-head PR CI and lock guard succeeded on all configured platforms. Refactor and clean-code review completed; no remaining findings.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and documented shared pygls editor diagnostics, verified with protocol tests and the locked cross-platform CI matrix.
+<!-- SECTION:FINAL_SUMMARY:END -->

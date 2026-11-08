@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 15:39'
+updated_date: '2026-11-08 15:44'
 tags:
   - specification
   - architecture
@@ -93,7 +93,7 @@ Before committing to this interface, verify compatibility with the Skills CLI, l
 
 ## 9. Current implementation boundary
 
-The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, an output-aware parser, reference and declared-type validation, and CLI and LSP diagnostics; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Phase context protocols, general semantic content validation, rendering, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings. The PyGLS dependency requires a relock bot update before locked CI can verify the milestone.
+The core implements a decorator-based plugin registry, static installed plugin manifests, JSON capability discovery, an output-aware parser, reference and declared-type validation, and CLI and LSP diagnostics; see `docs/plugins.md` and `docs/language.md`. The Manim package remains a version-only scaffold. Phase context protocols, general semantic content validation, rendering, narration, timing synchronization, and skill installation are not implemented. Version 1 plugin manifests lack type declarations and produce warnings. The PyGLS dependency is locked and included in the developer environment.
 
 ## 10. Initial product acceptance goals
 
@@ -111,7 +111,7 @@ These goals describe future capability, not current completion:
 - Grammar beyond the first subset, richer phrase patterns, source file boundaries and imports.
 - Typed semantic IR beyond the source-level parse nodes, cross-output content contracts, composition rules, and representation selection.
 - Core-version compatibility negotiation, plugin acquisition and approval policy.
-- LSP protocol integration, diagnostics format, incremental validation, and provenance granularity.
+- Deeper incremental validation, richer LSP features, and provenance granularity.
 - Animation interpolation, time units, concurrency, narration alignment, and audio provider abstraction.
 - Further CLI commands, schema evolution, and the workflow for obtaining plugins.
 - Skill lockfile interoperability, symlinks versus copies, and lifecycle safety.
