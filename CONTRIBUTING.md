@@ -42,7 +42,7 @@ restore procedure, see [CI](docs/ci.md).
    For user-visible behavior, add a scenario and a failing test first when
    practical.
 3. Update the relevant documentation and report any behavior or checks that
-   remain unimplemented or unverified. Keep `examples/` empty until the public
+   remain unimplemented or unverified. Do not add standalone examples until the public
    API is stable.
 
 ## Built-in CLI commands
