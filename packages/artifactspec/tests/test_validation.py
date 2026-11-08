@@ -174,9 +174,10 @@ def test_validation_cli_human_and_json_diagnostics(
     from typer.testing import CliRunner
 
     from artifactspec import cli
+    from artifactspec.commands import validate as validate_command
 
     monkeypatch.setattr(
-        cli,
+        validate_command,
         "installed_plugins",
         lambda: {"typed": (None, typed_registry.manifests()[0])},
     )
