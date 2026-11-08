@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
-import re
+from typing import cast
+
+from lark import Lark, Token, Tree
+from lark.exceptions import UnexpectedInput
 
 from artifactspec.plugins import Registry
 from artifactspec.syntax import (
@@ -17,12 +20,26 @@ from artifactspec.syntax import (
     StringValue,
 )
 
+# No whitespace is ignored: separators and capability word spacing are literal.
+# Earley allows grammar words such as "named" and "of" inside capability names.
+_GRAMMAR = r"""
+header: "Output " IDENT "."
+create: "Create " capability " named " IDENT "."
+set: "Set " capability " of " IDENT " to " JSON_STRING "."
+capability: WORD (" " WORD)*
+IDENT: /[A-Za-z][A-Za-z0-9_-]*/
+WORD: /[A-Za-z0-9_-]+/
+JSON_STRING: /"(?:[^"\\]|\\.)*"/
+"""
+_PARSER = Lark(
+    _GRAMMAR,
+    parser="earley",
+    lexer="dynamic",
+    ambiguity="explicit",
+    propagate_positions=True,
+    start=["header", "create", "set"],
+)
 _SET_PREFIX = "Set "
-_IDENTIFIER = r"[A-Za-z][A-Za-z0-9_-]*"
-_CAPABILITY = re.compile(r"[A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*")
-_OUTPUT = re.compile(rf"Output ({_IDENTIFIER})\.")
-_CREATE = re.compile(rf"Create (.+) named ({_IDENTIFIER})\.")
-_SEPARATOR = re.compile(rf" of ({_IDENTIFIER}) to ")
 
 
 class ParseError(ValueError):
@@ -41,26 +58,30 @@ def _span(source: str, line: int, start: int, end: int) -> SourceSpan:
     return SourceSpan(source, Position(line, start + 1), Position(line, end + 1))
 
 
-def _set_candidates(body: str) -> list[tuple[str, re.Match[str], str]]:
-    """Find syntactically valid property, reference and literal combinations."""
-    candidates: list[tuple[str, re.Match[str], str]] = []
-    for separator in _SEPARATOR.finditer(body):
-        name = body[: separator.start()]
-        literal = body[separator.end() :]
-        if (
-            not _CAPABILITY.fullmatch(name)
-            or not literal.startswith('"')
-            or not literal.endswith('"')
-        ):
-            continue
-        try:
-            value = json.loads(literal)
-        except (ValueError, RecursionError):
-            continue
-        if not isinstance(value, str):
-            continue
-        candidates.append((name, separator, value))
-    return candidates
+def _parse_line(
+    line: str, start: str, span: SourceSpan, code: str, message: str
+) -> Tree:
+    try:
+        tree = _PARSER.parse(line, start=start)
+    except UnexpectedInput as error:
+        raise ParseError(code, message, span) from error
+    if tree.data == "_ambig" or any(tree.find_data("_ambig")):
+        raise ParseError(
+            "ambiguous_statement", "Statement has multiple interpretations", span
+        )
+    return tree
+
+
+def _token_span(token: Token, span: SourceSpan) -> SourceSpan:
+    assert token.start_pos is not None and token.end_pos is not None
+    offset = span.start.column - 1
+    return _span(
+        span.source, span.start.line, offset + token.start_pos, offset + token.end_pos
+    )
+
+
+def _capability(tree: Tree) -> str:
+    return " ".join(str(word) for word in tree.children)
 
 
 def _set_statement(
@@ -73,53 +94,35 @@ def _set_statement(
         raise ParseError(
             "malformed_statement", "Set statements must end with a period", span
         )
-    candidates = _set_candidates(line[len(_SET_PREFIX) : -1])
-    if not candidates:
-        raise ParseError(
-            "malformed_statement",
-            'Expected Set <property> of <reference> to "<string>".',
-            span,
-        )
-    if len(candidates) != 1:
-        raise ParseError(
-            "ambiguous_statement", "Set statement has multiple interpretations", span
-        )
-    name, separator, value = candidates[0]
+    message = 'Expected Set <property> of <reference> to "<string>".'
+    tree = _parse_line(line, "set", span, "malformed_statement", message)
+    capability, reference, literal = tree.children
+    name = _capability(cast(Tree, capability))
+    reference = cast(Token, reference)
+    literal = cast(Token, literal)
+    try:
+        value = json.loads(str(literal))
+    except (ValueError, RecursionError) as error:
+        raise ParseError("malformed_statement", message, span) from error
     if name not in properties:
         raise ParseError(
             "unknown_property",
             f"Property {name!r} is not registered for output {output!r}",
             span,
         )
-    offset = span.start.column - 1
-    body_start = offset + len(_SET_PREFIX)
-    ref_span = _span(
-        span.source,
-        span.start.line,
-        body_start + separator.start(1),
-        body_start + separator.end(1),
-    )
-    value_span = _span(
-        span.source,
-        span.start.line,
-        body_start + separator.end(),
-        offset + len(line) - 1,
-    )
     return SetStatement(
         name,
-        Reference(separator.group(1), ref_span),
-        StringValue(value, value_span),
+        Reference(str(reference), _token_span(reference, span)),
+        StringValue(value, _token_span(literal, span)),
         span,
     )
 
 
 def _parse_output(line: str, span: SourceSpan, outputs: set[str]) -> str:
-    match = _OUTPUT.fullmatch(line)
-    if match is None:
-        raise ParseError(
-            "missing_output", "First statement must be Output <name>.", span
-        )
-    output = match.group(1)
+    tree = _parse_line(
+        line, "header", span, "missing_output", "First statement must be Output <name>."
+    )
+    output = str(tree.children[0])
     if output not in outputs:
         raise ParseError("unknown_output", f"Output {output!r} is not registered", span)
     return output
@@ -128,16 +131,13 @@ def _parse_output(line: str, span: SourceSpan, outputs: set[str]) -> str:
 def _create_statement(
     line: str, span: SourceSpan, phrases: set[str], output: str
 ) -> CreateStatement:
-    match = _CREATE.fullmatch(line)
-    if (
-        match is None
-        or match.group(2) == "it"
-        or not _CAPABILITY.fullmatch(match.group(1))
-    ):
-        raise ParseError(
-            "malformed_statement", "Expected Create <phrase> named <object>.", span
-        )
-    phrase, name = match.groups()
+    message = "Expected Create <phrase> named <object>."
+    tree = _parse_line(line, "create", span, "malformed_statement", message)
+    capability, identifier = tree.children
+    phrase = _capability(cast(Tree, capability))
+    name = str(identifier)
+    if name == "it":
+        raise ParseError("malformed_statement", message, span)
     if phrase not in phrases:
         raise ParseError(
             "unknown_phrase",

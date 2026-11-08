@@ -60,6 +60,10 @@ rather than choosing one. Unknown, unavailable, or malformed statements produce 
 `ParseError` with a source span and diagnostic code. More than one output header
 is rejected as ambiguous, not silently overwritten.
 
+The parser uses Lark to parse each nonblank line according to this grammar, then
+checks capabilities against the supplied registry and decodes JSON strings. Lark
+is a runtime dependency, not a plugin loader or semantic validator.
+
 `artifactspec.parser.parse(text, registry, source="...")` returns an immutable
 `Document` containing an output and typed `CreateStatement` and `SetStatement`
 nodes. Lines and columns are one-based Unicode code-point positions; span ends

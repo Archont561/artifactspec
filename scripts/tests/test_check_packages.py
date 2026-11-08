@@ -41,7 +41,10 @@ def test_check_packages_validates_and_smoke_installs_both_wheels(monkeypatch):
     assert any("--no-deps" in call for call in calls)
     assert any("-I" in call and "-c" in call for call in calls)
     assert any(
-        any("from artifactspec.parser import parse" in arg for arg in call)
+        any(
+            "from artifactspec.parser import parse" in arg and "Set label of sun" in arg
+            for arg in call
+        )
         for call in calls
     )
     assert any(

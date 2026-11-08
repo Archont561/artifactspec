@@ -145,3 +145,69 @@ def test_registered_names_can_include_grammar_words():
     )
     assert document.statements[0].phrase == "a circle named circle"
     assert document.statements[1].property == "label of apple to orange"
+
+
+def test_lark_parses_each_kind_of_statement(registry, monkeypatch):
+    from lark import Lark
+
+    original = Lark.parse
+    parsed_starts = []
+
+    def record_parse(self, text, *args, **kwargs):
+        parsed_starts.append(kwargs.get("start"))
+        return original(self, text, *args, **kwargs)
+
+    monkeypatch.setattr(Lark, "parse", record_parse)
+    parse(
+        'Output image.\nCreate rounded circle named sun.\nSet label of sun to "x".',
+        registry,
+    )
+    assert parsed_starts == ["header", "create", "set"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'Set label of it to "bad\\q".',
+        'Set label of it to "bad\tcontrol".',
+        'Set label of it to "good" "bad".',
+        'Set  label of it to "x".',
+        'Set label  of it to "x".',
+        'Set label of it to "x". Set label of it to "y".',
+        "Create rounded  circle named sun.",
+        "Create rounded circle named sun. Create rounded circle named other.",
+    ],
+)
+def test_invalid_single_line_grammar_is_rejected(registry, line):
+    with pytest.raises(ParseError) as captured:
+        parse("Output image.\n" + line, registry)
+    assert captured.value.code == "malformed_statement"
+
+
+def test_literal_and_reference_spans_with_unicode_and_tabs(registry):
+    line = '\tSet label of sun to "☀ café".'
+    document = parse("\tOutput image.\n" + line, registry, source="unicode")
+    statement = document.statements[0]
+    assert statement.reference.span == SourceSpan(
+        "unicode",
+        Position(2, line.index("sun") + 1),
+        Position(2, line.index("sun") + 4),
+    )
+    assert statement.value.span == SourceSpan(
+        "unicode", Position(2, line.index('"') + 1), Position(2, len(line))
+    )
+    assert statement.value.value == "☀ café"
+
+
+def test_ambiguous_lark_parse_is_rejected(registry, monkeypatch):
+    from lark import Tree
+
+    from artifactspec import parser
+
+    monkeypatch.setattr(
+        parser._PARSER, "parse", lambda *args, **kwargs: Tree("_ambig", [])
+    )
+    with pytest.raises(ParseError) as captured:
+        parse("Output image.", registry)
+    assert captured.value.code == "ambiguous_statement"
+    assert captured.value.span.start == Position(1, 1)
