@@ -3,7 +3,7 @@ id: doc-1
 title: ArtifactSpec product and architecture specification
 type: specification
 created_date: '2026-11-08 02:46'
-updated_date: '2026-11-08 22:20'
+updated_date: '2026-11-08 22:30'
 tags:
   - specification
   - architecture
@@ -68,7 +68,7 @@ The user wants to reduce duplicated declarations and handler registration. The p
 
 Statement syntax should remain declarative and composable. Structured syntax components are a candidate because a Python f-string produces a plain string and does not retain the original property object. Exact composition, default behavior, property binding, semantic effects, and migration rules need a reviewed contract before implementation. Handlers should access an invocation-specific context as an object property; context binding must prevent state leakage across concurrent or nested calls. Representation and renderer contributions should follow the same object-oriented direction.
 
-The current trust boundary remains: discovery imports selected installed plugin objects, while parsing and validation use declarations without invoking handlers. Preserve source-linked diagnostics, reference and type checks, explicit plugin selection, serializable capability metadata, and versions derived from installed distributions. Semantic content stays separate from representations, composition, and rendering; SVG and events must remain independently installable and composable. Manim is a suggested inspiration, but the Python linter reference remains to be identified. This is proposed work, not an implemented API. Milestone m-12 tracks contract design (ART-46), implementation (ART-47), and migration (ART-48); the earlier decorator decision describes the current implementation pending review of its replacement.
+The current trust boundary remains: discovery imports selected installed plugin objects, while parsing and validation use declarations without invoking handlers. Preserve source-linked diagnostics, reference and type checks, explicit plugin selection, serializable capability metadata, and versions derived from installed distributions. Semantic content stays separate from representations, composition, and rendering; SVG and events must remain independently installable and composable. Manim and the Rude Python linter are suggested inspirations; assess their patterns without introducing runtime dependencies on either. This is proposed work, not an implemented API. Milestone m-12 tracks contract design (ART-46), implementation (ART-47), and migration (ART-48); the earlier decorator decision describes the current implementation pending review of its replacement.
 
 The current core exposes phase-specific context **protocols** to plugin functions and injects its own concrete implementations. Plugins should not need to import private core objects such as internal property-assignment classes. A context records or requests operations appropriate to its phase rather than exposing renderer internals by default.
 

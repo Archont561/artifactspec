@@ -5,3 +5,8 @@ ignorecase: false
 swap:
   '(?i:github[ ]actions)': GitHub Actions
   '(?i:artifact[ ]spec)': ArtifactSpec
+  '(?i:astgrep)': ast-grep
+  '(?i:semgrep)': Semgrep
+  '(?i:vale)': Vale
+  '(?i:alint)': Alint
+  '(?i:backlog[.]md)': Backlog.md

@@ -3,7 +3,13 @@ target-version = "py311"
 extend-exclude = [".cache", ".pixi", ".venv", "dist", "build", "*.egg-info", "**/*.md"]
 
 [lint]
-extend-select = ["I", "PTH"]
+# PCC-P01–P03 and PCC-S01 Python equivalents; see docs/ci.md for scope.
+extend-select = ["I", "PTH", "S102", "S110", "S113", "S301", "S307", "S506", "S602", "SIM105", "T201"]
+
+[lint.per-file-ignores]
+# Scripts intentionally communicate with callers via stdout and stderr.
+"scripts/**/*.py" = ["T201"]
+"**/tests/**/*.py" = ["T201"]
 
 [lint.isort]
 known-first-party = ["artifactspec"]

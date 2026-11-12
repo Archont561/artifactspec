@@ -14,6 +14,91 @@ from artifactspec.core.models import Composition, Element
 from artifactspec.core.syntax import Position, SourceSpan
 from artifactspec.plugin import Phrase, Representation
 
+_EXACT_MANIFEST = {
+    "schema_version": 3,
+    "id": "example",
+    "version": "1.0",
+    "outputs": ["image"],
+    "output_syntax": {"image": "Output image."},
+    "phrases": [
+        {
+            "name": "text",
+            "outputs": [],
+            "object_type": "text",
+            "syntax": "Create text named {name}.",
+        }
+    ],
+    "properties": [
+        {
+            "name": "value",
+            "outputs": [],
+            "target_types": ["text"],
+            "syntax": "Set value of {reference} to {value}.",
+        }
+    ],
+    "representations": [{"name": "exact", "outputs": [], "target_types": ["text"]}],
+    "renderers": [{"name": "exact-svg", "outputs": []}],
+}
+
+
+_EXACT_PLUGIN = """from html import escape
+from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
+plugin = Plugin("example", outputs={"image": "Output image."},
+    phrases=(Phrase("text", "text", "Create text named {name}."),),
+    properties=(Property("value", ("text",), "Set value of {reference} to {value}."),),
+    representations=(Representation("exact", ("text",)),), renderers=(Renderer("exact-svg"),))
+@plugin.phrase("text")
+def create(ctx): ctx.create("text")
+@plugin.property("value")
+def assign(ctx): ctx.set("value", ctx.value)
+@plugin.representation("exact")
+def layout(ctx):
+    for node in ctx.content.nodes:
+        ctx.add(node.name, (20, 40, dict(node.properties)["value"]))
+@plugin.renderer("exact-svg")
+def render(ctx):
+    x, y, text = ctx.composition.elements[0].value
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text x="{x}" y="{y}">{escape(text)}</text></svg>'
+    ctx.emit(svg.encode("utf-8"), media_type="image/svg+xml", editable=True)
+"""
+
+
+_BROKEN_MANIFEST = {
+    "schema_version": 3,
+    "id": "example",
+    "version": "1.0",
+    "outputs": ["image"],
+    "output_syntax": {"image": "Output image."},
+    "phrases": [
+        {
+            "name": "text",
+            "outputs": [],
+            "object_type": "text",
+            "syntax": "Create text named {name}.",
+        }
+    ],
+    "properties": [],
+    "representations": [{"name": "layout", "outputs": [], "target_types": ["text"]}],
+    "renderers": [{"name": "broken", "outputs": []}],
+}
+
+
+_BROKEN_PLUGIN = """from artifactspec.plugin import Plugin, Phrase, Representation, Renderer
+plugin = Plugin("example", outputs={"image": "Output image."},
+    phrases=(Phrase("text", "text", "Create text named {name}."),),
+    representations=(Representation("layout", ("text",)),), renderers=(Renderer("broken"),))
+@plugin.phrase("text")
+def create(ctx): ctx.create("text")
+@plugin.representation("layout")
+def layout(ctx):
+    ctx.warn("layout limitation")
+    ctx.add(ctx.content.nodes[0].name, "x")
+@plugin.renderer("broken")
+def broken(ctx):
+    ctx.warn("renderer limitation")
+    raise ValueError("renderer broke")
+"""
+
 
 @given(st.lists(st.booleans(), max_size=12))
 def test_provenance_status_distinguishes_missing_and_empty_elements(linked):
@@ -26,15 +111,14 @@ def test_provenance_status_distinguishes_missing_and_empty_elements(linked):
     )
     composition = Composition("image", "diagram", 640, 480, elements)
     spans, status = _composition_provenance(composition)
-    expected = (
-        "no_elements"
-        if not linked
-        else "available"
-        if all(linked)
-        else "partial"
-        if any(linked)
-        else "unavailable"
-    )
+    if not linked:
+        expected = "no_elements"
+    elif all(linked):
+        expected = "available"
+    elif any(linked):
+        expected = "partial"
+    else:
+        expected = "unavailable"
     assert status == expected
     assert spans == ((span,) if any(linked) else ())
 
@@ -160,51 +244,8 @@ def test_empty_composition_is_distinct_from_unavailable_provenance(tmp_path):
 def test_exact_synthetic_renderer_reports_no_limitations_without_claiming_fidelity(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
-    manifest = {
-        "schema_version": 3,
-        "id": "example",
-        "version": "1.0",
-        "outputs": ["image"],
-        "output_syntax": {"image": "Output image."},
-        "phrases": [
-            {
-                "name": "text",
-                "outputs": [],
-                "object_type": "text",
-                "syntax": "Create text named {name}.",
-            }
-        ],
-        "properties": [
-            {
-                "name": "value",
-                "outputs": [],
-                "target_types": ["text"],
-                "syntax": "Set value of {reference} to {value}.",
-            }
-        ],
-        "representations": [{"name": "exact", "outputs": [], "target_types": ["text"]}],
-        "renderers": [{"name": "exact-svg", "outputs": []}],
-    }
-    plugin = """from html import escape
-from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
-plugin = Plugin("example", outputs={"image": "Output image."},
-    phrases=(Phrase("text", "text", "Create text named {name}."),),
-    properties=(Property("value", ("text",), "Set value of {reference} to {value}."),),
-    representations=(Representation("exact", ("text",)),), renderers=(Renderer("exact-svg"),))
-@plugin.phrase("text")
-def create(ctx): ctx.create("text")
-@plugin.property("value")
-def assign(ctx): ctx.set("value", ctx.value)
-@plugin.representation("exact")
-def layout(ctx):
-    for node in ctx.content.nodes:
-        ctx.add(node.name, (20, 40, dict(node.properties)["value"]))
-@plugin.renderer("exact-svg")
-def render(ctx):
-    x, y, text = ctx.composition.elements[0].value
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text x="{x}" y="{y}">{escape(text)}</text></svg>'
-    ctx.emit(svg.encode("utf-8"), media_type="image/svg+xml", editable=True)
-"""
+    manifest = _EXACT_MANIFEST
+    plugin = _EXACT_PLUGIN
     fixture = installed_plugin_factory(manifest=manifest, module_source=plugin)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"
@@ -241,45 +282,7 @@ def render(ctx):
     assert "fidelity" not in data
 
 
-def test_failure_keeps_validation_warnings_and_phase_limitations(
-    tmp_path, monkeypatch, installed_plugin_factory
-):
-    manifest = {
-        "schema_version": 3,
-        "id": "example",
-        "version": "1.0",
-        "outputs": ["image"],
-        "output_syntax": {"image": "Output image."},
-        "phrases": [
-            {
-                "name": "text",
-                "outputs": [],
-                "object_type": "text",
-                "syntax": "Create text named {name}.",
-            }
-        ],
-        "properties": [],
-        "representations": [
-            {"name": "layout", "outputs": [], "target_types": ["text"]}
-        ],
-        "renderers": [{"name": "broken", "outputs": []}],
-    }
-    plugin = """from artifactspec.plugin import Plugin, Phrase, Representation, Renderer
-plugin = Plugin("example", outputs={"image": "Output image."},
-    phrases=(Phrase("text", "text", "Create text named {name}."),),
-    representations=(Representation("layout", ("text",)),), renderers=(Renderer("broken"),))
-@plugin.phrase("text")
-def create(ctx): ctx.create("text")
-@plugin.representation("layout")
-def layout(ctx):
-    ctx.warn("layout limitation")
-    ctx.add(ctx.content.nodes[0].name, "x")
-@plugin.renderer("broken")
-def broken(ctx):
-    ctx.warn("renderer limitation")
-    raise ValueError("renderer broke")
-"""
-    from artifactspec.core import rendering
+def _install_validation_warning(monkeypatch, rendering):
     from artifactspec.core.validation import Diagnostic, ValidationResult
 
     original_validate = rendering.validate
@@ -294,6 +297,16 @@ def broken(ctx):
         )
 
     monkeypatch.setattr(rendering, "validate", validate_with_warning)
+
+
+def test_failure_keeps_validation_warnings_and_phase_limitations(
+    tmp_path, monkeypatch, installed_plugin_factory
+):
+    manifest = _BROKEN_MANIFEST
+    plugin = _BROKEN_PLUGIN
+    from artifactspec.core import rendering
+
+    _install_validation_warning(monkeypatch, rendering)
     fixture = installed_plugin_factory(manifest=manifest, module_source=plugin)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"

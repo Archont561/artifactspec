@@ -15,12 +15,16 @@ _FIELDS = {
 }
 
 
-def compile_template(template: str, fields: set[str]) -> re.Pattern[str]:
-    """Compile literal text and named typed placeholders to a full-match pattern."""
+def _validate_template(template: str) -> None:
     if not isinstance(template, str) or not template or len(template) > 1024:
         raise TemplateError("template must be nonempty and at most 1024 characters")
     if template != template.strip() or "\n" in template or "\r" in template:
         raise TemplateError("template must be a single trimmed line")
+
+
+def compile_template(template: str, fields: set[str]) -> re.Pattern[str]:
+    """Compile literal text and named typed placeholders to a full-match pattern."""
+    _validate_template(template)
     parts: list[str] = []
     seen: set[str] = set()
     previous_field = False
@@ -33,7 +37,7 @@ def compile_template(template: str, fields: set[str]) -> re.Pattern[str]:
         if field is None:
             previous_field = False
             continue
-        if field not in fields or field in seen or spec or conversion:
+        if field not in fields or field in seen or (spec or conversion):
             raise TemplateError(f"invalid or repeated placeholder {field!r}")
         if previous_field and not literal:
             raise TemplateError("placeholders must be separated by literal text")

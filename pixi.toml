@@ -29,6 +29,8 @@ twine = ">=6.2, <7"
 pip-audit = ">=2.9, <3"
 packaging = ">=26, <27"
 hypothesis = ">=6, <7"
+rude = ">=0.1a4, <0.1a5"
+rude-clean-code = ">=0.3.1, <0.4"
 
 # Pixi evaluates activation.env in the platform shell. Disable word splitting and
 # globbing inside the substitution so checkout paths containing spaces are safe.
@@ -44,7 +46,8 @@ test-svg = { cmd = "python -m pytest packages/artifactspec-svg/tests", depends-o
 test-events = { cmd = "python -m pytest packages/artifactspec-events/tests", depends-on = ["install-projects"] }
 test-manim = { cmd = "python -m pytest packages/artifactspec-manim/tests", depends-on = ["install-projects"] }
 coverage-all = { cmd = "python -m pytest scripts/tests packages/artifactspec/tests packages/artifactspec-manim/tests packages/artifactspec-svg/tests packages/artifactspec-events/tests --cov=packages/artifactspec/src --cov=packages/artifactspec-manim/src --cov=packages/artifactspec-svg/src --cov=packages/artifactspec-events/src --cov-report=term-missing --cov-report=xml:coverage.xml", depends-on = ["install-projects", "bun-install"] }
-lint = "ruff check ."
+lint = { cmd = "ruff check .", depends-on = ["lint-clean-code"] }
+lint-clean-code = "python scripts/check_clean_code.py"
 format-check = "ruff format --check ."
 typecheck = "mypy packages/artifactspec/src packages/artifactspec-manim/src packages/artifactspec-svg/src packages/artifactspec-events/src"
 audit = "pip-audit --local --skip-editable"

@@ -6,6 +6,7 @@ workflow consumes job outputs; environment values are local to their job.
 
 - Only `docs/`, `backlog/`, root README/CHANGELOG, or a package README: run the
   prose, repository, and docs whitespace checks, not Python package suites.
+  Python files and stubs under documentation or backlog paths run full CI.
 - Only `scripts/` (including its `scripts/tests/` suite), optionally with docs:
   run the scripts suite; also run documentation checks when docs are present.
   Package paths, including any `tests/scripts/` paths, trigger full CI.
@@ -128,3 +129,40 @@ The prose task checks root guides, package READMEs, `docs/`, and Markdown under
 `backlog/`. It uses a pinned Linux x86-64 Vale binary from the Bun lockfile,
 which is installed separately from the offline Pixi sandbox. The selected
 upstream style rules and their licenses are vendored; see `.vale/styles/README.md`.
+
+## Python clean code policy
+
+`pixi run --locked lint` runs both Ruff and `lint-clean-code`. The latter runs
+Rude with the `rude-clean-code` Basic profile in the root `pyproject.toml`. It
+checks tracked and unignored Python files, including files under hidden
+folders, and fails on every configured warning or error. Rude itself treats
+warnings as non-fatal, so the wrapper reads its JSON diagnostics and also
+fails if the required plugin rules are unavailable. Informational findings do
+not fail the gate. `pixi run --locked lint-clean-code` runs that part alone.
+Both the pre-commit hook and the scripts-only and full CI jobs run the same
+`lint` task.
+
+The profile keeps deterministic module, function, class, complexity, exception,
+and selected comment checks. It uses a 50-line function limit, seven
+parameters, and twelve locals; other selected thresholds use plugin defaults.
+The limits apply to tests as well as production code, except where the plugin
+itself excludes tests. Heuristic indicators and repeated-literal checks are not
+selected: repeated protocol strings and test fixtures otherwise produce many
+false positives. Architecture and pattern checks are not enabled without
+project-specific boundary definitions. These omissions are not a claim that
+all 59 plugin rules are enforced.
+
+The Python policy also adapts the applicable ideas from
+[polyglot-clean-code at commit `39497482cb634f63a4c49433c342d5073d7cabba`](https://github.com/Archont561/polyglot-clean-code/tree/39497482cb634f63a4c49433c342d5073d7cabba).
+Ruff checks swallowed exceptions (`S110`, `SIM105`), dynamic execution and
+unsafe deserialization (`S102`, `S301`, `S307`, `S506`), shell subprocesses
+(`S602`), requests without timeouts (`S113`), bare exceptions (`E722`), and
+library debug prints (`T201`). Rude checks global statements (`CC308`),
+exception chaining (`CC310`), and unreferenced task markers (`CC903`). Script
+and test output is exempt from the print rule because it can be intentional.
+The repository policy also adapts the applicable upstream README, agent,
+contributing, documentation-index, and Bun-version checks. Vale uses selected
+upstream terminology rules alongside the existing spacing check. These are
+native-tool adaptations, not a claim of identical pattern matching or adoption
+of every upstream preset; its task-runner and directory layout requirements do
+not match this repository.

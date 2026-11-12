@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 
-def test_installed_wheel_object_is_imported_with_distribution_version(tmp_path):
+def _wheel_project(tmp_path):
     project = tmp_path / "project"
     package = project / "wheel_plugin"
     package.mkdir(parents=True)
@@ -24,6 +24,11 @@ def test_installed_wheel_object_is_imported_with_distribution_version(tmp_path):
         '[tool.hatch.build.targets.wheel]\npackages = ["wheel_plugin"]\n',
         encoding="utf-8",
     )
+    return project, marker
+
+
+def test_installed_wheel_object_is_imported_with_distribution_version(tmp_path):
+    project, marker = _wheel_project(tmp_path)
     target = tmp_path / "target"
     install = subprocess.run(
         [

@@ -15,6 +15,8 @@ def git(repo: Path, *args: str) -> bytes:
 
 
 def kind(path: str) -> str:
+    if path.endswith((".py", ".pyi")) and not path.startswith("scripts/"):
+        return "full"
     if path.startswith(("docs/", "backlog/")) or path in {"README.md", "CHANGELOG.md"}:
         return "docs"
     if path.startswith("packages/") and Path(path).name == "README.md":

@@ -61,11 +61,10 @@ def _resolve(
     latest: CreateStatement | None,
     definitions: dict[str, list[CreateStatement]],
 ) -> tuple[CreateStatement | None, Diagnostic | None]:
-    candidates = (
-        ([latest] if latest is not None else [])
-        if reference.name == "it"
-        else definitions.get(reference.name, [])
-    )
+    if reference.name == "it":
+        candidates = [latest] if latest is not None else []
+    else:
+        candidates = definitions.get(reference.name, [])
     if not candidates:
         message = (
             "Create an object before using 'it'."

@@ -10,7 +10,7 @@ import typer
 
 from artifactspec.cli.commands._plugins import load_cli_registry
 from artifactspec.core.pipeline import PipelineError
-from artifactspec.core.rendering import render
+from artifactspec.core.rendering import RenderResult, render
 from artifactspec.core.validation import Diagnostic
 from artifactspec.plugins import RegistrationError
 
@@ -76,6 +76,14 @@ def _operational_error(
         typer.echo(f"artifactspec: {exc}", err=True)
 
 
+def _success_json(result: RenderResult, format: OutputFormat) -> None:
+    data = asdict(result)
+    data["artifact"]["path"] = str(result.artifact.path)
+    if format == OutputFormat.json:
+        data["status"] = "success"
+    _json({"schema_version": 1, **data})
+
+
 @app.command("render")
 def render_command(
     path: Annotated[Path, typer.Argument(help="UTF-8 specification file.")],
@@ -126,8 +134,4 @@ def render_command(
     except (OSError, UnicodeError, RegistrationError) as exc:
         _operational_error(exc, format)
         raise typer.Exit(code=2) from exc
-    data = asdict(result)
-    data["artifact"]["path"] = str(result.artifact.path)
-    if format == OutputFormat.json:
-        data["status"] = "success"
-    _json({"schema_version": 1, **data})
+    _success_json(result, format)

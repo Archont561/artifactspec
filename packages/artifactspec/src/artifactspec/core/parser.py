@@ -1,6 +1,6 @@
 """Strict source-linked parsing using static plugin-defined syntax."""
 
-from artifactspec.core.syntax import Document, Position, SourceSpan
+from artifactspec.core.syntax import Document, SourceSpan
 from artifactspec.plugins import CapabilityCatalog
 
 
@@ -14,10 +14,6 @@ class ParseError(ValueError):
         super().__init__(
             f"{span.source}:{span.start.line}:{span.start.column}: {message}"
         )
-
-
-def _span(source: str, line: int, start: int, end: int) -> SourceSpan:
-    return SourceSpan(source, Position(line, start + 1), Position(line, end + 1))
 
 
 def parse(

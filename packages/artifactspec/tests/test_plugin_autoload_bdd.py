@@ -14,6 +14,19 @@ scenarios(
 )
 
 
+_CONFLICT_MANIFEST = {
+    "schema_version": 3,
+    "id": "example",
+    "version": "1.0",
+    "outputs": ["image"],
+    "output_syntax": {"image": "Output image."},
+    "phrases": [],
+    "properties": [],
+    "representations": [],
+    "renderers": [{"name": "svg", "outputs": []}],
+}
+
+
 @pytest.fixture
 def state():
     return {}
@@ -115,17 +128,7 @@ def loaded(state):
 def test_autoload_rejects_conflicts_after_importing_plugins(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
-    manifest = {
-        "schema_version": 3,
-        "id": "example",
-        "version": "1.0",
-        "outputs": ["image"],
-        "output_syntax": {"image": "Output image."},
-        "phrases": [],
-        "properties": [],
-        "representations": [],
-        "renderers": [{"name": "svg", "outputs": []}],
-    }
+    manifest = _CONFLICT_MANIFEST
     fixture = installed_plugin_factory(manifest=manifest)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "scene.art"

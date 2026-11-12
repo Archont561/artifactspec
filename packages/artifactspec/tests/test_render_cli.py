@@ -7,6 +7,58 @@ from typer.testing import CliRunner
 
 from artifactspec.cli import app
 
+_EXTERNAL_MANIFEST = {
+    "schema_version": 3,
+    "id": "example",
+    "version": "1.0",
+    "outputs": ["image"],
+    "output_syntax": {"image": "Output image."},
+    "phrases": [
+        {
+            "name": "text",
+            "outputs": [],
+            "object_type": "text",
+            "syntax": "Create text named {name}.",
+        }
+    ],
+    "properties": [
+        {
+            "name": "value",
+            "outputs": [],
+            "target_types": ["text"],
+            "syntax": "Set value of {reference} to {value}.",
+        }
+    ],
+    "representations": [{"name": "external", "outputs": [], "target_types": ["text"]}],
+    "renderers": [{"name": "external-svg", "outputs": []}],
+}
+
+
+def _external_source(marker):
+    return f"""from pathlib import Path
+Path({str(marker)!r}).write_text("loaded")
+from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
+from html import escape
+plugin = Plugin("example", outputs={{"image": "Output image."}},
+    phrases=(Phrase("text", "text", "Create text named {{name}}."),),
+    properties=(Property("value", ("text",), "Set value of {{reference}} to {{value}}."),),
+    representations=(Representation("external", ("text",)),), renderers=(Renderer("external-svg"),))
+@plugin.phrase("text")
+def create(ctx):
+    ctx.create("text")
+@plugin.property("value")
+def apply(ctx):
+    ctx.set("value", ctx.value)
+@plugin.representation("external")
+def layout(ctx):
+    for node in ctx.content.nodes:
+        ctx.add(node.name, dict(node.properties)["value"])
+@plugin.renderer("external-svg")
+def render(ctx):
+    text = escape(ctx.composition.elements[0].value)
+    ctx.emit(f"<svg>{{text}}</svg>".encode(), media_type="image/svg+xml", editable=True)
+"""
+
 
 @pytest.mark.parametrize(
     "extra,expected",
@@ -107,57 +159,9 @@ def test_cli_result_surfaces_layout_limitations(tmp_path):
 def test_cli_loads_only_explicitly_approved_installed_plugin(
     tmp_path, monkeypatch, installed_plugin_factory
 ):
-    manifest = {
-        "schema_version": 3,
-        "id": "example",
-        "version": "1.0",
-        "outputs": ["image"],
-        "output_syntax": {"image": "Output image."},
-        "phrases": [
-            {
-                "name": "text",
-                "outputs": [],
-                "object_type": "text",
-                "syntax": "Create text named {name}.",
-            }
-        ],
-        "properties": [
-            {
-                "name": "value",
-                "outputs": [],
-                "target_types": ["text"],
-                "syntax": "Set value of {reference} to {value}.",
-            }
-        ],
-        "representations": [
-            {"name": "external", "outputs": [], "target_types": ["text"]}
-        ],
-        "renderers": [{"name": "external-svg", "outputs": []}],
-    }
+    manifest = _EXTERNAL_MANIFEST
     marker = tmp_path / "executed"
-    source_code = f"""from pathlib import Path
-Path({str(marker)!r}).write_text("loaded")
-from artifactspec.plugin import Plugin, Phrase, Property, Representation, Renderer
-from html import escape
-plugin = Plugin("example", outputs={{"image": "Output image."}},
-    phrases=(Phrase("text", "text", "Create text named {{name}}."),),
-    properties=(Property("value", ("text",), "Set value of {{reference}} to {{value}}."),),
-    representations=(Representation("external", ("text",)),), renderers=(Renderer("external-svg"),))
-@plugin.phrase("text")
-def create(ctx):
-    ctx.create("text")
-@plugin.property("value")
-def apply(ctx):
-    ctx.set("value", ctx.value)
-@plugin.representation("external")
-def layout(ctx):
-    for node in ctx.content.nodes:
-        ctx.add(node.name, dict(node.properties)["value"])
-@plugin.renderer("external-svg")
-def render(ctx):
-    text = escape(ctx.composition.elements[0].value)
-    ctx.emit(f"<svg>{{text}}</svg>".encode(), media_type="image/svg+xml", editable=True)
-"""
+    source_code = _external_source(marker)
     fixture = installed_plugin_factory(manifest=manifest, module_source=source_code)
     monkeypatch.syspath_prepend(str(fixture["path"]))
     source = tmp_path / "source.art"

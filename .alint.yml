@@ -72,3 +72,36 @@ rules:
     paths: .vale.ini
     level: error
     message: Required Vale configuration is missing.
+  # Applicable PCC-R03 and PCC-R04 repository policy, adapted to this layout.
+  - id: pcc-r03-bun-package-manager
+    kind: json_path_matches
+    paths: package.json
+    path: $.packageManager
+    matches: '^bun@1\.4\.[0-9]+$'
+    level: error
+    message: '[PCC-R03] Pin the Bun package manager version.'
+  - id: pcc-r04-readme
+    kind: file_exists
+    paths: README.md
+    level: error
+    message: '[PCC-R04] Keep the project README.'
+  - id: pcc-r04-agents
+    kind: file_exists
+    paths: AGENTS.md
+    level: error
+    message: '[PCC-R04] Keep agent instructions.'
+  - id: pcc-r04-contributing
+    kind: file_exists
+    paths: CONTRIBUTING.md
+    level: error
+    message: '[PCC-R04] Keep contributing guidance.'
+  - id: pcc-r04-docs-index
+    kind: file_exists
+    paths: docs/README.md
+    level: error
+    message: '[PCC-R04] Keep a documentation index.'
+  - id: require-rude-config
+    kind: file_exists
+    paths: pyproject.toml
+    level: error
+    message: Rude clean code configuration is missing.

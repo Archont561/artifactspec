@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import asdict, dataclass
-from typing import Any, Protocol, TypeVar, cast
+from dataclasses import asdict
+from typing import Any, TypeVar, cast
+
+from artifactspec.plugins._contributions import (
+    Phrase,
+    Property,
+    Renderer,
+    Representation,
+)
 
 KINDS = ("phrases", "properties", "representations", "renderers")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -30,6 +37,19 @@ def _outputs(values: Any, field: str) -> list[str]:
     if len(set(result)) != len(result):
         raise RegistrationError(f"{field} contains duplicate outputs")
     return sorted(result)
+
+
+def _output_syntax(syntax: Any, outputs: list[str]) -> dict[str, str]:
+    from artifactspec.core.templates import TemplateError, compile_template
+
+    if not isinstance(syntax, dict) or set(syntax) != set(outputs):
+        raise RegistrationError("output_syntax must map every output to a template")
+    for template in syntax.values():
+        try:
+            compile_template(template, set())
+        except TemplateError as exc:
+            raise RegistrationError(f"invalid output template: {exc}") from exc
+    return dict(sorted(syntax.items()))
 
 
 def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str, Any]:
@@ -62,17 +82,7 @@ def validate_manifest(data: Any, *, expected_id: str | None = None) -> dict[str,
         else _name(data["version"], "version"),
         "outputs": _outputs(data["outputs"], "outputs"),
     }
-    from artifactspec.core.templates import TemplateError, compile_template
-
-    syntax = data["output_syntax"]
-    if not isinstance(syntax, dict) or set(syntax) != set(result["outputs"]):
-        raise RegistrationError("output_syntax must map every output to a template")
-    for template in syntax.values():
-        try:
-            compile_template(template, set())
-        except TemplateError as exc:
-            raise RegistrationError(f"invalid output template: {exc}") from exc
-    result["output_syntax"] = dict(sorted(syntax.items()))
+    result["output_syntax"] = _output_syntax(data["output_syntax"], result["outputs"])
     for kind in KINDS:
         result[kind] = _normalize_entries(
             data[kind], kind, result["outputs"], plugin_id
@@ -146,6 +156,22 @@ def _normalize_entries(
     return sorted(normalized, key=lambda item: item["name"])
 
 
+def _check_contribution_conflicts(
+    previous: list[tuple[str, dict[str, Any]]],
+    kind: str,
+    item: dict[str, Any],
+    plugin_id: str,
+) -> None:
+    for previous_id, previous_item in previous:
+        disjoint_types = kind == "representations" and not set(
+            item["target_types"]
+        ).intersection(previous_item["target_types"])
+        if not disjoint_types:
+            raise RegistrationError(
+                f"conflicting {kind} contribution {item['name']!r} from plugins {previous_id!r} and {plugin_id!r}"
+            )
+
+
 def check_conflicts(manifests: Iterable[dict[str, Any]]) -> None:
     """Reject ambiguous identities and contributions deterministically."""
     ids: set[str] = set()
@@ -159,15 +185,20 @@ def check_conflicts(manifests: Iterable[dict[str, Any]]) -> None:
             for item in manifest[kind]:
                 key = kind, item["name"]
                 previous = contributions.setdefault(key, [])
-                for previous_id, previous_item in previous:
-                    disjoint_types = kind == "representations" and not set(
-                        item["target_types"]
-                    ).intersection(previous_item["target_types"])
-                    if not disjoint_types:
-                        raise RegistrationError(
-                            f"conflicting {kind} contribution {item['name']!r} from plugins {previous_id!r} and {plugin_id!r}"
-                        )
+                _check_contribution_conflicts(previous, kind, item, plugin_id)
                 previous.append((plugin_id, item))
+
+
+def _filter_contributions(item: dict[str, Any], output: str) -> None:
+    for kind in KINDS:
+        item[kind] = [
+            entry
+            for entry in item[kind]
+            if not entry["outputs"] or output in entry["outputs"]
+        ]
+        for entry in item[kind]:
+            if entry["outputs"]:
+                entry["outputs"] = [output]
 
 
 def filter_manifests(
@@ -182,71 +213,9 @@ def filter_manifests(
                 continue
             item["outputs"] = [output]
             item["output_syntax"] = {output: item["output_syntax"][output]}
-            for kind in KINDS:
-                item[kind] = [
-                    entry
-                    for entry in item[kind]
-                    if not entry["outputs"] or output in entry["outputs"]
-                ]
-                for entry in item[kind]:
-                    if entry["outputs"]:
-                        entry["outputs"] = [output]
+            _filter_contributions(item, output)
         result.append(item)
     return result
-
-
-class CapabilityCatalog(Protocol):
-    """Read-only capability metadata used by parsing and validation."""
-
-    def manifests(self, *, output: str | None = None) -> list[dict[str, Any]]: ...
-
-
-class ManifestCatalog:
-    """Validated static metadata without importing or invoking plugin code."""
-
-    def __init__(self, manifests: Iterable[dict[str, Any]]) -> None:
-        self._manifests = [validate_manifest(item) for item in manifests]
-        check_conflicts(self._manifests)
-
-    def manifests(self, *, output: str | None = None) -> list[dict[str, Any]]:
-        return filter_manifests(self._manifests, output)
-
-
-@dataclass(frozen=True, slots=True)
-class Phrase:
-    """Declare the complete syntax and semantic type of an object statement."""
-
-    name: str
-    object_type: str
-    syntax: str
-    outputs: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Property:
-    """Declare the complete syntax and accepted target types of a property."""
-
-    name: str
-    target_types: tuple[str, ...]
-    syntax: str
-    outputs: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Representation:
-    """Declare an object-type-specific representation contribution."""
-
-    name: str
-    target_types: tuple[str, ...]
-    outputs: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Renderer:
-    """Declare a rendering contribution."""
-
-    name: str
-    outputs: tuple[str, ...] = ()
 
 
 class Plugin:
@@ -383,13 +352,14 @@ class Registry:
         for plugin in self._plugins.values():
             for manifest in filter_manifests([plugin.manifest()], output):
                 for item in manifest["representations"]:
-                    if item["name"] == name and object_type in item["target_types"]:
-                        handler = plugin._handlers.get(("representations", name))
-                        if handler is None:
-                            raise RegistrationError(
-                                f"no handler registered for representations contribution {name!r}"
-                            )
-                        return handler
+                    if item["name"] != name or object_type not in item["target_types"]:
+                        continue
+                    handler = plugin._handlers.get(("representations", name))
+                    if handler is None:
+                        raise RegistrationError(
+                            f"no handler registered for representations contribution {name!r}"
+                        )
+                    return handler
         raise RegistrationError(
             f"no representation {name!r} for object type {object_type!r} and output {output!r}"
         )
