@@ -1,9 +1,8 @@
 """Public plugin declaration, registry, and catalog API."""
 
+from artifactspec.plugins._catalog import CapabilityCatalog, ManifestCatalog
 from artifactspec.plugins._registry import (
     KINDS,
-    CapabilityCatalog,
-    ManifestCatalog,
     Phrase,
     Plugin,
     Property,

@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from artifactspec.core._lines import source_lines
-from artifactspec.core.parser import ParseError, _span
+from artifactspec.core.parser import ParseError
 from artifactspec.core.syntax import (
     CreateStatement,
     Document,
+    Position,
     Reference,
     SetStatement,
     SourceSpan,
@@ -52,6 +53,10 @@ def _patterns(manifests: list[dict[str, Any]], output: str | None) -> list[_Patt
     return result
 
 
+def _span(source: str, line: int, start: int, end: int) -> SourceSpan:
+    return SourceSpan(source, Position(line, start + 1), Position(line, end + 1))
+
+
 def _field_span(match: re.Match[str], name: str, span: SourceSpan) -> SourceSpan:
     offset = span.start.column - 1
     return _span(
@@ -82,9 +87,31 @@ def _statement(pattern: _Pattern, match: re.Match[str], span: SourceSpan) -> Sta
     )
 
 
+def _line_span(raw: str, source: str, line_number: int) -> SourceSpan:
+    offset = len(raw) - len(raw.lstrip())
+    return _span(source, line_number, offset, offset + len(raw.strip()))
+
+
+def _match_line(
+    line: str, patterns: list[_Pattern], span: SourceSpan, *, output: str | None
+) -> tuple[_Pattern, re.Match[str]]:
+    candidates = [
+        (pattern, match)
+        for pattern in patterns
+        if (match := pattern.pattern.fullmatch(line)) is not None
+    ]
+    if not candidates:
+        code = "unknown_output" if output is None else "unknown_statement"
+        raise ParseError(code, "No plugin syntax matches this statement", span)
+    if len(candidates) > 1:
+        raise ParseError(
+            "ambiguous_statement", "Statement matches multiple plugin templates", span
+        )
+    return candidates[0]
+
+
 def parse_templates(text: str, catalog: CapabilityCatalog, source: str) -> Document:
-    manifests = catalog.manifests()
-    headers = _patterns(manifests, None)
+    headers = _patterns(catalog.manifests(), None)
     patterns: list[_Pattern] = []
     output: str | None = None
     first: SourceSpan | None = None
@@ -94,24 +121,11 @@ def parse_templates(text: str, catalog: CapabilityCatalog, source: str) -> Docum
         line = raw.strip()
         if not line:
             continue
-        offset = len(raw) - len(raw.lstrip())
-        span = _span(source, line_number, offset, offset + len(line))
+        span = _line_span(raw, source, line_number)
         last = span
-        candidates = [
-            (pattern, match)
-            for pattern in (headers if output is None else patterns)
-            if (match := pattern.pattern.fullmatch(line)) is not None
-        ]
-        if not candidates:
-            code = "unknown_output" if output is None else "unknown_statement"
-            raise ParseError(code, "No plugin syntax matches this statement", span)
-        if len(candidates) > 1:
-            raise ParseError(
-                "ambiguous_statement",
-                "Statement matches multiple plugin templates",
-                span,
-            )
-        pattern, match = candidates[0]
+        pattern, match = _match_line(
+            line, headers if output is None else patterns, span, output=output
+        )
         if output is None:
             output = pattern.name
             first = span

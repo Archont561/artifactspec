@@ -158,7 +158,7 @@ def _check_render_json(entry: tuple[str, ...], source: Path, destination: Path) 
     )
 
 
-def _check_render(root: Path, python: Path, console: Path) -> None:
+def _check_svg_only(root: Path, console: Path) -> None:
     svg_source = root / "svg-only.art"
     svg_source.write_text(
         'Output image.\nCreate text named title.\nSet value of title to "SVG only".',
@@ -178,6 +178,10 @@ def _check_render(root: Path, python: Path, console: Path) -> None:
         "--output",
         str(root / "svg-only.svg"),
     )
+
+
+def _check_render(root: Path, python: Path, console: Path) -> None:
+    _check_svg_only(root, console)
     source = root / "scene.art"
     source.write_text(
         'Output image.\nCreate text named title.\nSet value of title to "wheel smoke".\n'

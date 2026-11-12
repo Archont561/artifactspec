@@ -12,7 +12,7 @@ actionlint
 autodiscover(?:ed|ing|y)?
 add_typer
 airlocked
-alint
+(?i:alint)
 callables
 inspectable
 (?i:lsp)
@@ -27,3 +27,5 @@ subpackages
 undercounts
 unignored
 validator's
+Semgrep
+ast-grep

@@ -40,34 +40,27 @@ def fake_builds(monkeypatch, *, with_license, with_plugin_json=False):
     return calls
 
 
-def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
-    calls = fake_builds(monkeypatch, with_license=True)
-    check_packages.main()
-    assert sum("build" in call for call in calls) == 4
-    assert any("twine" in call and "check" in call for call in calls)
-    assert any("--no-deps" in call for call in calls)
-    assert any("-I" in call and "-c" in call for call in calls)
+def _assert_api_smoke(calls):
     assert any(
         any(
-            "from artifactspec.core.parser import parse" in arg
-            and "Set label of sun" in arg
-            and "from artifactspec.core.validation import validate" in arg
-            and "from artifactspec.editor.lsp import create_server" in arg
-            and "from artifactspec.cli.commands import capabilities" in arg
-            and "find_spec('artifactspec.commands') is None" in arg
+            all(
+                text in arg
+                for text in (
+                    "from artifactspec.core.parser import parse",
+                    "Set label of sun",
+                    "from artifactspec.core.validation import validate",
+                    "from artifactspec.editor.lsp import create_server",
+                    "from artifactspec.cli.commands import capabilities",
+                    "find_spec('artifactspec.commands') is None",
+                )
+            )
             for arg in call
         )
         for call in calls
     )
-    assert any(
-        "-I" in call and "artifactspec" in call and "capabilities" in call
-        for call in calls
-    )
-    assert any(
-        Path(call[0]).name in {"artifactspec", "artifactspec.exe"}
-        and "capabilities" in call
-        for call in calls
-    )
+
+
+def _assert_command_help(calls):
     for command in ("capabilities", "validate", "lsp", "render"):
         assert any(
             "-I" in call and command in call and "--help" in call for call in calls
@@ -78,6 +71,26 @@ def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
             and "--help" in call
             for call in calls
         )
+
+
+def test_check_packages_validates_and_smoke_installs_all_wheels(monkeypatch):
+    calls = fake_builds(monkeypatch, with_license=True)
+    check_packages.main()
+    assert sum("build" in call for call in calls) == 4
+    assert any("twine" in call and "check" in call for call in calls)
+    assert any("--no-deps" in call for call in calls)
+    assert any("-I" in call and "-c" in call for call in calls)
+    _assert_api_smoke(calls)
+    assert any(
+        "-I" in call and "artifactspec" in call and "capabilities" in call
+        for call in calls
+    )
+    assert any(
+        Path(call[0]).name in {"artifactspec", "artifactspec.exe"}
+        and "capabilities" in call
+        for call in calls
+    )
+    _assert_command_help(calls)
     assert any(
         "find_spec('artifactspec_svg') is None" in arg
         and "event_image.media_type" in arg

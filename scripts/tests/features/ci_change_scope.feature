@@ -8,6 +8,9 @@ Feature: Select the appropriate CI checks for changed files
       | path                                     | scope   |
       | docs/guide.md                            | docs    |
       | backlog/tasks/ART-1.md                   | docs    |
+      | docs/example.py                          | full    |
+      | backlog/example.py                       | full    |
+      | docs/types.pyi                           | full    |
       | scripts/maintenance.py                   | scripts |
       | scripts/tests/test_detection.py          | scripts |
       | packages/artifactspec/tests/scripts/a.py | full    |

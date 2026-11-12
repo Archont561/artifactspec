@@ -2,11 +2,18 @@
 
 import json
 import string
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from typer.main import get_command
+from typer.testing import CliRunner
 
+from artifactspec.cli import commands, create_app
 from artifactspec.core.parser import ParseError, parse
 from artifactspec.core.validation import validate
 from artifactspec.editor.lsp import _LanguageDocument, _position
@@ -239,6 +246,18 @@ def test_capability_discovery_matches_filtered_static_metadata(
         assert manifest["outputs"] == outputs
 
 
+def _restore_commands(module_names, previous, previous_attributes, absent):
+    for module_name in module_names:
+        sys.modules.pop(module_name, None)
+    sys.modules.update(previous)
+    for name, value in previous_attributes.items():
+        if value is absent:
+            if hasattr(commands, name):
+                delattr(commands, name)
+        else:
+            setattr(commands, name, value)
+
+
 @settings(max_examples=25, deadline=None)
 @given(
     names=st.lists(
@@ -249,15 +268,6 @@ def test_capability_discovery_matches_filtered_static_metadata(
     )
 )
 def test_command_discovery_registers_all_public_modules(names):
-    import sys
-    import tempfile
-    from pathlib import Path
-    from unittest.mock import patch
-
-    from typer.testing import CliRunner
-
-    from artifactspec.cli import commands, create_app
-
     with tempfile.TemporaryDirectory() as directory:
         for name in names:
             (Path(directory) / f"{name}.py").write_text(
@@ -276,23 +286,13 @@ def test_command_discovery_registers_all_public_modules(names):
                 app = create_app()
                 result = CliRunner().invoke(app, ["--help"])
                 assert result.exit_code == 0
-                from typer.main import get_command
-
                 assert sorted(get_command(app).commands) == sorted(names)
                 assert [group.typer_instance for group in app.registered_groups] == [
                     sys.modules[f"artifactspec.cli.commands.{name}"].app
                     for name in sorted(names)
                 ]
         finally:
-            for module_name in module_names:
-                sys.modules.pop(module_name, None)
-            sys.modules.update(previous)
-            for name, value in previous_attributes.items():
-                if value is absent:
-                    if hasattr(commands, name):
-                        delattr(commands, name)
-                else:
-                    setattr(commands, name, value)
+            _restore_commands(module_names, previous, previous_attributes, absent)
 
 
 @settings(max_examples=25, deadline=None)

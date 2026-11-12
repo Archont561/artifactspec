@@ -16,13 +16,7 @@ from artifactspec.plugins import (
 )
 
 
-def installed_plugins(*, only: set[str] | None = None) -> dict[str, Plugin]:
-    """Import selected entry points and return their declared Plugin objects."""
-    entries = sorted(
-        metadata.entry_points(group="artifactspec.plugins"),
-        key=lambda ep: (ep.name, ep.value),
-    )
-    selected = [entry for entry in entries if only is None or entry.name in only]
+def _validate_entries(selected: list[metadata.EntryPoint]) -> None:
     names: set[str] = set()
     for entry in selected:
         if not re.fullmatch(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*", entry.name):
@@ -43,6 +37,16 @@ def installed_plugins(*, only: set[str] | None = None) -> dict[str, Plugin]:
         if entry.name in names:
             raise RegistrationError(f"duplicate plugin id {entry.name!r}")
         names.add(entry.name)
+
+
+def installed_plugins(*, only: set[str] | None = None) -> dict[str, Plugin]:
+    """Import selected entry points and return their declared Plugin objects."""
+    entries = sorted(
+        metadata.entry_points(group="artifactspec.plugins"),
+        key=lambda ep: (ep.name, ep.value),
+    )
+    selected = [entry for entry in entries if only is None or entry.name in only]
+    _validate_entries(selected)
     plugins = {}
     for entry in selected:
         try:

@@ -30,6 +30,8 @@ safe_name = st.text(
 change = st.one_of(
     safe_name.map(lambda name: (f"docs/{name}.md", "docs")),
     safe_name.map(lambda name: (f"backlog/{name}.md", "docs")),
+    safe_name.map(lambda name: (f"docs/{name}.py", "full")),
+    safe_name.map(lambda name: (f"backlog/{name}.py", "full")),
     safe_name.map(lambda name: (f"packages/{name}/README.md", "docs")),
     safe_name.map(lambda name: (f"scripts/{name}.py", "scripts")),
     safe_name.map(lambda name: (f"packages/{name}/src/main.py", "full")),
@@ -47,13 +49,12 @@ def test_change_detection_selects_the_most_conservative_scope(changes, event):
     with patch.object(detect_changes, "git", side_effect=calls):
         result = detect_changes.detect(Path("/unused"), "base", "head", event)
     kinds = {kind for _, kind in changes}
-    expected = (
-        "full"
-        if not kinds or "full" in kinds
-        else "scripts"
-        if "scripts" in kinds
-        else "docs"
-    )
+    if not kinds or "full" in kinds:
+        expected = "full"
+    elif "scripts" in kinds:
+        expected = "scripts"
+    else:
+        expected = "docs"
     assert result["scope"] == expected
     assert result["paths"] == paths
     assert result["reason"] == ("changed paths" if paths else "empty diff")

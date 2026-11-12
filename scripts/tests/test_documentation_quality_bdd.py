@@ -77,6 +77,8 @@ def reports_nothing(state):
         ("This sentsnce has a typo.\n", "Vale.Spelling", True),
         ("Use GitHub Actions for checks.\n", None, False),
         ("Use Github actions for checks.\n", "Project.Terms", True),
+        ("Run semgrep and astgrep.\n", "Project.Terms", True),
+        ("Run Semgrep and ast-grep.\n", None, False),
         ("Use GitHub\nActions for checks.\n", None, False),
         ("Run this.  Next run that.\n", "Microsoft.Spacing", True),
     ],
@@ -136,3 +138,22 @@ def test_docs_and_full_ci_run_prose_and_repository_checks():
         assert match is not None
         assert "pixi run --locked lint-prose" in match.group(1)
         assert "pixi run --locked alint" in match.group(1)
+
+
+@pytest.mark.parametrize(
+    ("package_manager", "expect_failure"),
+    [("bun@1.4.2", False), ("bun@1.5.0", True), ("npm@1.4.2", True)],
+)
+def test_repository_policy_checks_pinned_bun_version(
+    tmp_path, package_manager, expect_failure
+):
+    (tmp_path / "package.json").write_text(
+        json.dumps({"packageManager": package_manager}), encoding="utf-8"
+    )
+    result = subprocess.run(
+        ["alint", "check", "-c", str(ROOT / ".alint.yml"), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ("pcc-r03-bun-package-manager" in result.stdout) == expect_failure

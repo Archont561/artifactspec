@@ -18,6 +18,17 @@ def commit(repo: Path, revision: str) -> str:
     )
 
 
+def _default_comparison(repo: Path, head: str, ref: str, default: str) -> str | None:
+    if not default or not ref.startswith("refs/heads/") or ref == "refs/heads/":
+        raise ValueError("branch or default branch is unavailable")
+    # On the default branch, origin/<default> already points to the new
+    # head. Comparing against it would silently select no commits.
+    if ref == f"refs/heads/{default}":
+        return None
+    default_head = commit(repo, f"refs/remotes/origin/{default}")
+    return git(repo, "merge-base", default_head, head)
+
+
 def select_range(
     repo: Path, base: str, head: str, event: str, forced: bool, ref: str, default: str
 ) -> str:
@@ -27,14 +38,10 @@ def select_range(
     if (event == "push" and (forced or missing_base)) or (
         event == "workflow_dispatch" and missing_base
     ):
-        if not default or not ref.startswith("refs/heads/") or ref == "refs/heads/":
-            raise ValueError("branch or default branch is unavailable")
-        # On the default branch, origin/<default> already points to the new
-        # head. Comparing against it would silently select no commits.
-        if ref == f"refs/heads/{default}":
+        comparison_base = _default_comparison(repo, head, ref, default)
+        if comparison_base is None:
             return head
-        default_head = commit(repo, f"refs/remotes/origin/{default}")
-        base = git(repo, "merge-base", default_head, head)
+        base = comparison_base
     elif missing_base:
         raise ValueError("comparison base is unavailable")
     else:

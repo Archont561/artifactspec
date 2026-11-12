@@ -2,6 +2,8 @@
 
 The repository uses Vale's built-in spelling and repetition checks, project
 terminology rules, Microsoft spacing, and the write-good weasel-word warning.
+The project terminology rules also adapt selected PCC-D01 names from
+[polyglot-clean-code at commit `39497482cb634f63a4c49433c342d5073d7cabba`](https://github.com/Archont561/polyglot-clean-code/tree/39497482cb634f63a4c49433c342d5073d7cabba).
 The write-good warning applies only to `docs/`; backlog Markdown is checked
 with the smaller global rule set. Warnings are advisory; errors fail the task.
 This deliberately scoped policy avoids rewriting historical backlog records or

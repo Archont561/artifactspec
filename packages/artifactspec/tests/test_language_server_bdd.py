@@ -14,6 +14,33 @@ scenarios(
 )
 
 
+_CIRCLE_MANIFEST = {
+    "schema_version": 3,
+    "id": "example",
+    "version": "1",
+    "outputs": ["canvas"],
+    "output_syntax": {"canvas": "Output canvas."},
+    "phrases": [
+        {
+            "name": "circle",
+            "outputs": [],
+            "object_type": "circle",
+            "syntax": "Create circle named {name}.",
+        }
+    ],
+    "properties": [
+        {
+            "name": "circle-color",
+            "outputs": [],
+            "target_types": ["circle"],
+            "syntax": "Set color of {reference} to {value}.",
+        }
+    ],
+    "representations": [],
+    "renderers": [],
+}
+
+
 class Client:
     def __init__(self, env, options=()):
         self.process = subprocess.Popen(
@@ -71,33 +98,7 @@ def state():
 @given("an editor connected to the language server with typed plugin capabilities")
 @given("an editor using incremental changes with typed plugin capabilities")
 def connected(state, installed_plugin_factory):
-    fixture = installed_plugin_factory(
-        manifest={
-            "schema_version": 3,
-            "id": "example",
-            "version": "1",
-            "outputs": ["canvas"],
-            "output_syntax": {"canvas": "Output canvas."},
-            "phrases": [
-                {
-                    "name": "circle",
-                    "outputs": [],
-                    "object_type": "circle",
-                    "syntax": "Create circle named {name}.",
-                }
-            ],
-            "properties": [
-                {
-                    "name": "circle-color",
-                    "outputs": [],
-                    "target_types": ["circle"],
-                    "syntax": "Set color of {reference} to {value}.",
-                }
-            ],
-            "representations": [],
-            "renderers": [],
-        }
-    )
+    fixture = installed_plugin_factory(manifest=_CIRCLE_MANIFEST)
     state.update(fixture)
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(
@@ -163,12 +164,7 @@ def cleared(state):
     assert result["params"]["diagnostics"] == []
 
 
-def test_utf16_incremental_edits_close_and_cli_consistency(
-    state, installed_plugin_factory
-):
-    connected(state, installed_plugin_factory)
-    client = state["client"]
-    uri = state["uri"]
+def _open_utf16_document(client, uri):
     text = "Output canvas.\nCreate 😀."
     client.send(
         "textDocument/didOpen",
@@ -187,6 +183,15 @@ def test_utf16_incremental_edits_close_and_cli_consistency(
         "start": {"line": 1, "character": 0},
         "end": {"line": 1, "character": 10},
     }
+
+
+def test_utf16_incremental_edits_close_and_cli_consistency(
+    state, installed_plugin_factory
+):
+    connected(state, installed_plugin_factory)
+    client = state["client"]
+    uri = state["uri"]
+    _open_utf16_document(client, uri)
     client.send(
         "textDocument/didChange",
         {
@@ -320,57 +325,7 @@ def edit_unicode_separator_document(state):
     )
 
 
-@pytest.mark.parametrize(
-    "encoding,expected_offset", [("utf-8", 16), ("utf-16", 14), ("utf-32", 14)]
-)
-@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
-def test_incremental_edits_after_separators_use_negotiated_encoding(
-    state, installed_plugin_factory, encoding, expected_offset, newline
-):
-    fixture = installed_plugin_factory(
-        manifest={
-            "schema_version": 3,
-            "id": "example",
-            "version": "1",
-            "outputs": ["canvas"],
-            "output_syntax": {"canvas": "Output canvas."},
-            "phrases": [
-                {
-                    "name": "circle",
-                    "outputs": [],
-                    "object_type": "circle",
-                    "syntax": "Create circle named {name}.",
-                }
-            ],
-            "properties": [
-                {
-                    "name": "circle-color",
-                    "outputs": [],
-                    "target_types": ["circle"],
-                    "syntax": "Set color of {reference} to {value}.",
-                }
-            ],
-            "representations": [],
-            "renderers": [],
-        }
-    )
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(fixture["path"]), env.get("PYTHONPATH", "")]
-    )
-    client = state["client"] = Client(env)
-    client.send(
-        "initialize",
-        {
-            "processId": None,
-            "rootUri": None,
-            "capabilities": {"general": {"positionEncodings": [encoding]}},
-        },
-        id=1,
-    )
-    assert client.receive()["result"]["capabilities"]["positionEncoding"] == encoding
-    client.send("initialized", {})
-    uri = "file:///scene.art"
+def _assert_separator_diagnostic(client, uri, newline, expected_offset):
     text = newline.join(
         [
             "Output canvas.",
@@ -396,6 +351,34 @@ def test_incremental_edits_after_separators_use_negotiated_encoding(
         "start": {"line": 3, "character": expected_offset},
         "end": {"line": 3, "character": expected_offset + 7},
     }
+
+
+@pytest.mark.parametrize(
+    "encoding,expected_offset", [("utf-8", 16), ("utf-16", 14), ("utf-32", 14)]
+)
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_incremental_edits_after_separators_use_negotiated_encoding(
+    state, installed_plugin_factory, encoding, expected_offset, newline
+):
+    fixture = installed_plugin_factory(manifest=_CIRCLE_MANIFEST)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(fixture["path"]), env.get("PYTHONPATH", "")]
+    )
+    client = state["client"] = Client(env)
+    client.send(
+        "initialize",
+        {
+            "processId": None,
+            "rootUri": None,
+            "capabilities": {"general": {"positionEncodings": [encoding]}},
+        },
+        id=1,
+    )
+    assert client.receive()["result"]["capabilities"]["positionEncoding"] == encoding
+    client.send("initialized", {})
+    uri = "file:///scene.art"
+    _assert_separator_diagnostic(client, uri, newline, expected_offset)
     client.send(
         "textDocument/didChange",
         {

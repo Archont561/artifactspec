@@ -136,6 +136,19 @@ def render(
         raise
 
 
+def _write_artifact(
+    destination: Path, data: bytes, limitations: tuple[str, ...]
+) -> None:
+    try:
+        _write_atomically(destination, data)
+    except Exception as exc:
+        raise PipelineError(
+            f"Artifact write failed: {exc}",
+            code="output_write_failed",
+            limitations=limitations,
+        ) from exc
+
+
 def _render_validated(
     validation: ValidationResult,
     registry: Registry,
@@ -170,14 +183,7 @@ def _render_validated(
             code="representation_failed",
             limitations=limitations,
         ) from exc
-    try:
-        _write_atomically(destination, data)
-    except Exception as exc:
-        raise PipelineError(
-            f"Artifact write failed: {exc}",
-            code="output_write_failed",
-            limitations=limitations,
-        ) from exc
+    _write_artifact(destination, data, limitations)
     return RenderResult(
         Artifact(destination, media_type, editable),
         output,

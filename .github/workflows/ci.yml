@@ -110,6 +110,7 @@ jobs:
         with:
           pixi-version: v0.84.1
           locked: true
+      - run: pixi run --locked lint
       - run: pixi run --locked test-scripts
 
   full:

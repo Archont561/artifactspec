@@ -1,0 +1,14 @@
+# Rude's Basic profile: deterministic, file-local Clean Code checks.
+# Heuristic indicators are excluded because they are not deterministic warnings.
+[tool.rude]
+select = ["CC0", "CC1", "CC2", "CC3", "CC903", "CC905", "CC906", "CC907", "CC910"]
+ignore = ["CC105", "CC106", "CC108", "CC204", "CC205", "CC206", "CC304", "CC305", "CC307"]
+
+[tool.rude.rules.CC101]
+max_lines = 50
+
+[tool.rude.rules.CC102]
+max_parameters = 7
+
+[tool.rude.rules.CC104]
+max_locals = 12
